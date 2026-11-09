@@ -1,0 +1,16 @@
+name,classes,kind,save_ability,half_on_save,n_dice,die,damage_type,school,notes
+Fire Bolt,Wizard|Sorcerer|Artificer,attack,,FALSE,1,10,fire,evocation,
+Ray of Frost,Wizard|Sorcerer,attack,,FALSE,1,8,cold,evocation,Speed -10
+Chill Touch,Wizard|Sorcerer|Warlock,attack,,FALSE,1,8,necrotic,necromancy,No healing
+Eldritch Blast,Warlock,attack,,FALSE,1,10,force,evocation,"1 beam per tier; Agonizing Blast adds CHA per beam"
+Produce Flame,Druid,attack,,FALSE,1,8,fire,conjuration,
+Thorn Whip,Druid|Artificer,attack,,FALSE,1,6,piercing,transmutation,Pull 10 ft
+Sacred Flame,Cleric,save,DEX,FALSE,1,8,radiant,evocation,
+Toll the Dead,Cleric|Wizard|Warlock,save,WIS,FALSE,1,12,necrotic,necromancy,"1d8 if target undamaged; d12 assumed"
+Word of Radiance,Cleric,save,CON,FALSE,1,6,radiant,evocation,5-ft radius
+Vicious Mockery,Bard,save,WIS,FALSE,1,4,psychic,enchantment,Disadvantage on next attack
+Mind Sliver,Wizard|Sorcerer|Warlock,save,INT,FALSE,1,6,psychic,enchantment,-1d4 to next save
+Poison Spray,Wizard|Sorcerer|Warlock|Druid|Artificer,save,CON,FALSE,1,12,poison,conjuration,10-ft range
+Frostbite,Wizard|Sorcerer|Warlock|Druid|Artificer,save,CON,FALSE,1,6,cold,evocation,Disadvantage on next attack
+Booming Blade,Wizard|Sorcerer|Warlock|Artificer,weapon,,FALSE,1,8,thunder,evocation,"Melee weapon attack; +1d8 thunder on hit per tier above 1; more if the target moves (not counted)"
+Green-Flame Blade,Wizard|Sorcerer|Warlock|Artificer,weapon,,FALSE,1,8,fire,evocation,"Melee weapon attack; +1d8 fire per tier above 1 to the target; second creature takes (tier-1)d8 + mod"

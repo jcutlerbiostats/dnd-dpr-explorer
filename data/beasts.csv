@@ -1,0 +1,17 @@
+beast,cr,min_level,ac,hp,attack,n_attacks,to_hit,n_dice,die,flat,damage_type,save_dc,save_half,note
+Brown bear,1,2,11,34,Bite,1,6,1,8,4,piercing,,,Multiattack bite + claws
+Brown bear,1,2,11,34,Claws,1,6,2,6,4,slashing,,,
+Dire wolf,1,2,14,37,Bite,1,5,2,6,3,piercing,,,Pack Tactics not applied
+Giant elk,2,6,14,42,Ram,1,6,2,6,4,bludgeoning,,,Hooves only vs prone
+Polar bear,2,6,12,42,Bite,1,7,1,8,5,piercing,,,
+Polar bear,2,6,12,42,Claws,1,7,2,6,5,slashing,,,
+Giant scorpion,3,9,15,52,Claw,2,4,1,8,2,bludgeoning,,,
+Giant scorpion,3,9,15,52,Sting,1,4,1,10,2,piercing,,,
+Giant scorpion,3,9,15,52,Sting poison,1,,4,10,0,poison,12,TRUE,CON save on sting hit; modelled as independent save
+Elephant,4,12,12,76,Gore,1,8,3,8,6,piercing,,,Stomp only vs prone
+Air elemental,5,10,15,90,Slam,2,8,2,8,5,bludgeoning,,,Elemental Wild Shape (10th)
+Earth elemental,5,10,17,126,Slam,2,8,2,8,5,bludgeoning,,,Elemental Wild Shape (10th)
+Fire elemental,5,10,13,102,Touch,2,6,2,6,3,fire,,,Elemental Wild Shape (10th); ignite 1d10/turn not modelled
+Water elemental,5,10,14,114,Slam,2,7,2,8,4,bludgeoning,,,Elemental Wild Shape (10th)
+Triceratops,5,15,13,95,Gore,1,9,4,8,6,piercing,,,Stomp only vs prone
+Mammoth,6,18,13,126,Gore,1,10,4,8,7,piercing,,,Stomp only vs prone

@@ -1,0 +1,15 @@
+name,category,base,dex_cap
+None,none,10,99
+Padded,light,11,99
+Leather,light,11,99
+Studded leather,light,12,99
+Hide,medium,12,2
+Chain shirt,medium,13,2
+Scale mail,medium,14,2
+Breastplate,medium,14,2
+Half plate,medium,15,2
+Ring mail,heavy,14,0
+Chain mail,heavy,16,0
+Splint,heavy,17,0
+Plate,heavy,18,0
+Mage Armor,light,13,99

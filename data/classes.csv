@@ -1,0 +1,146 @@
+class,subclass,level,feature,effect_type,value,notes
+Barbarian,,1,Rage,rage_damage,2,"+2 melee STR damage; resist bludgeoning/piercing/slashing while raging"
+Barbarian,,1,Unarmored Defense,ac_formula,10+dex+con,"Shield allowed"
+Barbarian,,2,Reckless Attack,roll_mode,advantage_both,"Advantage on your melee STR attacks; enemies have advantage against you"
+Barbarian,,5,Extra Attack,extra_attack,2,
+Barbarian,,9,Rage damage +3,rage_damage,3,
+Barbarian,,9,Brutal Critical (1 die),crit_dice_bonus,1,
+Barbarian,,13,Brutal Critical (2 dice),crit_dice_bonus,2,
+Barbarian,,16,Rage damage +4,rage_damage,4,
+Barbarian,,17,Brutal Critical (3 dice),crit_dice_bonus,3,
+Barbarian,,20,Primal Champion,ability_bonus,str+4;con+4,"Max 24"
+Barbarian,Ancestral Guardian,3,Ancestral Protectors,ally_only,,"Target has disadvantage vs others; no effect on own DPR or own damage taken"
+Barbarian,Ancestral Guardian,6,Spirit Shield,ally_only,2d6,"Reduces damage to ALLIES; 3d6 at 10, 4d6 at 14"
+Barbarian,Ancestral Guardian,14,Vengeful Ancestors,ally_only,,"Reflects Spirit Shield reduction; ally-triggered"
+Barbarian,Battlerager,3,Battlerager Armor,bonus_attack,1d4 piercing,"Bonus action spike attack; STR + rage damage apply; wears spiked (medium) armor"
+Barbarian,Battlerager,6,Reckless Abandon,temp_hp,con,"Temp HP = CON mod when using Reckless while raging"
+Barbarian,Battlerager,14,Spiked Retribution,reflect_on_melee_hit,3 piercing,"While raging"
+Barbarian,Beast,3,Form of the Beast,natural_weapons,bite 1d8;claws 1d6 +1 attack;tail 1d8,"Claws grant one extra attack per Attack action"
+Barbarian,Beast,10,Infectious Fury,rider_save,2d12 psychic,"WIS save DC 8+PB+CON; PB uses per long rest; alt effect: forced reaction attack"
+Barbarian,Berserker,3,Frenzy,bonus_attack,weapon,"Bonus action melee weapon attack each turn while raging; exhaustion after"
+Barbarian,Berserker,14,Retaliation,reaction_attack,weapon,"Reaction melee attack when damaged by adjacent creature"
+Barbarian,Giant,3,Giant's Havoc,thrown_rage,,"Rage damage applies to thrown weapons; reach +5"
+Barbarian,Giant,6,Elemental Cleaver,rider_per_hit,1d6 elemental,
+Barbarian,Giant,14,Demiurgic Colossus,rider_per_hit,2d6 elemental,
+Barbarian,Storm Herald,3,Storm Aura (Desert),aura_auto,2 fire,"3 at 5, 4 at 10, 5 at 15, 6 at 20; all creatures within 10 ft"
+Barbarian,Storm Herald,3,Storm Aura (Sea),aura_save,1d6 lightning,"DEX save; 2d6 at 10, 3d6 at 15, 4d6 at 20; one creature"
+Barbarian,Storm Herald,3,Storm Aura (Tundra),temp_hp,2,"Temp HP to allies; 3/4/5/6"
+Barbarian,Storm Herald,6,Storm Soul,resist,fire|lightning|cold,"By aura type; always on"
+Barbarian,Storm Herald,14,Raging Storm (Desert),reflect_save,half_level fire,"Reaction; DEX save"
+Barbarian,Totem Warrior,3,Totem Spirit (Bear),resist,all_but_psychic,"While raging"
+Barbarian,Totem Warrior,3,Totem Spirit (Wolf),ally_only,,"Allies advantage on melee vs enemies within 5 ft of you"
+Barbarian,Totem Warrior,14,Totemic Attunement (Tiger),bonus_attack,weapon,"After moving 20+ ft straight toward a Large or smaller target"
+Barbarian,Wild Magic,3,Wild Surge 3,aura_save,1d6 force,"DEX save; bonus action each turn"
+Barbarian,Wild Magic,3,Wild Surge 5,reflect_on_hit,1d6 force,"Attacker takes 1d6 force when it hits you"
+Barbarian,Wild Magic,3,Wild Surge 6,ac_bonus,1,
+Barbarian,Wild Magic,3,Wild Surge 8,aura_save,1d6 radiant,"CON save; bonus action each turn"
+Barbarian,Zealot,3,Divine Fury,rider_once_per_turn,1d6+half_level,"Radiant or necrotic; first creature hit each turn"
+Fighter,,1,Fighting Style,fighting_style,Archery|Defense|Dueling|Great Weapon Fighting|Two-Weapon Fighting|Protection,
+Fighter,,2,Action Surge,extra_action,1,"One extra action per short rest; 2 uses at 17; modelled as fraction of rounds"
+Fighter,,5,Extra Attack,extra_attack,2,
+Fighter,,11,Extra Attack (2),extra_attack,3,
+Fighter,,20,Extra Attack (3),extra_attack,4,
+Fighter,Champion,3,Improved Critical,crit_range,19,
+Fighter,Champion,15,Superior Critical,crit_range,18,
+Fighter,Battle Master,3,Combat Superiority,rider_per_hit,d8 superiority die,"4 dice/short rest; d10 at 10, d12 at 18; 5 dice at 7, 6 at 15; damage maneuvers add one die"
+Fighter,Samurai,3,Fighting Spirit,roll_mode,advantage,"Bonus action; 3/long rest; 5/10/15 temp HP"
+Fighter,Samurai,15,Rapid Strike,extra_attack_forgo_adv,1,"Forgo advantage on one attack for an additional attack"
+Fighter,Rune Knight,3,Giant's Might,rider_once_per_turn,1d6,"Bonus action; PB uses/long rest; 1d8 at 10, 1d10 at 18"
+Fighter,Echo Knight,3,Unleash Incarnation,extra_attack,1,"CON mod uses/long rest"
+Fighter,Cavalier,3,Unwavering Mark,bonus_attack,weapon + half level,"Advantage; STR mod uses/long rest; requires marked target to damage someone else"
+Fighter,Arcane Archer,3,Arcane Shot,rider_once_per_turn,2d6,"2 uses/short rest; 4d6 at 18; ranged only"
+Fighter,Psi Warrior,3,Psionic Strike,rider_once_per_turn,d6 + INT force,"Psionic die d6 (d8 at 5, d10 at 11, d12 at 17); PB×2 dice/long rest"
+Fighter,Eldritch Knight,7,War Magic,alt_routine,,"Cantrip + bonus action weapon attack; not modelled (weapon routine shown)"
+Fighter,Purple Dragon Knight,3,Rallying Cry,ally_only,,
+Rogue,,1,Sneak Attack,rider_once_per_turn,ceil(level/2)d6,"Needs advantage or an adjacent ally; finesse or ranged weapon"
+Rogue,,5,Uncanny Dodge,first_hit_halve,,"Reaction: halve one attack's damage"
+Rogue,,18,Elusive,no_enemy_advantage,,
+Rogue,Assassin,3,Assassinate,nova,,"Advantage vs. creatures that haven't acted; auto-crit on surprised targets; first round only — not modelled"
+Rogue,Swashbuckler,3,Rakish Audacity,sneak_condition,,"Sneak Attack without advantage if no other creature within 5 ft"
+Rogue,Inquisitive,3,Insightful Fighting,sneak_condition,,"Insight vs Deception as bonus action: Sneak Attack without advantage for 1 min"
+Rogue,Inquisitive,13,Eye for Weakness,rider_once_per_turn,3d6,"While Insightful Fighting is active"
+Rogue,Soulknife,3,Psychic Blades,weapon,1d6 psychic; bonus 1d4,"Finesse, thrown; bonus-action blade adds ability mod"
+Rogue,Soulknife,9,Homing Strikes,miss_convert,psionic die,"Not modelled in v1"
+Rogue,Phantom,3,Wails from the Grave,multi_target,,"Half Sneak Attack to a second creature — out of scope"
+Monk,,1,Martial Arts,martial_arts_die,d4,"d6 at 5, d8 at 11, d10 at 17; DEX for attacks; bonus-action unarmed strike"
+Monk,,1,Unarmored Defense,ac_formula,10+dex+wis,"No armor, no shield"
+Monk,,2,Flurry of Blows,bonus_attack,2 unarmed,"1 ki; replaces the free bonus unarmed strike"
+Monk,,3,Deflect Missiles,first_hit_reduce,1d10 + dex + level,"Ranged weapon attacks only"
+Monk,,5,Extra Attack,extra_attack,2,
+Monk,Kensei,3,Agile Parry,ac_bonus,2,"When you make an unarmed strike as part of the Attack action"
+Monk,Kensei,6,Deft Strike,rider_once_per_turn,martial arts die,"1 ki"
+Monk,Kensei,11,Sharpen the Blade,attack_damage_bonus,up to 3,"Ki spent as bonus action"
+Monk,Mercy,3,Hand of Harm,rider_once_per_turn,martial arts die + WIS necrotic,"1 ki"
+Monk,Astral Self,3,Arms of the Astral Self,weapon,martial arts die force; WIS,"1 ki; reach +5"
+Monk,Astral Self,11,Body of the Astral Self,rider_once_per_turn,martial arts die,"With astral arms"
+Monk,Astral Self,17,Awakened Astral Self,extra_attack,3,"+2 AC; 5 ki"
+Monk,Sun Soul,3,Radiant Sun Bolt,weapon,martial arts die radiant (ranged 30 ft),"Same numbers as unarmed strike"
+Monk,Ascendant Dragon,3,Breath of the Dragon,aoe,2 martial arts dice,"Replaces an attack; cone/line; not modelled"
+Paladin,,2,Fighting Style,fighting_style,Defense|Dueling|Great Weapon Fighting|Protection,
+Paladin,,2,Divine Smite,rider_per_hit,2d8 radiant,"+1d8 per slot level above 1st (max 5d8); +1d8 vs undead/fiends; policy slider"
+Paladin,,5,Extra Attack,extra_attack,2,
+Paladin,,11,Improved Divine Smite,rider_per_hit,1d8 radiant,"Every melee weapon hit"
+Paladin,Devotion,3,Sacred Weapon,attack_bonus,CHA,"Channel Divinity: +CHA to attack rolls for 1 min"
+Paladin,Vengeance,3,Vow of Enmity,roll_mode,advantage,"Channel Divinity: advantage vs one creature for 1 min"
+Paladin,Oathbreaker,7,Aura of Hate,damage_bonus,CHA,"Melee weapon damage"
+Paladin,Conquest,15,Scornful Rebuke,reflect_on_hit,CHA psychic,
+Ranger,,2,Fighting Style,fighting_style,Archery|Defense|Dueling|Two-Weapon Fighting,
+Ranger,,2,Hunter's Mark,rider_per_hit,1d6,"Spell; concentration; bonus action to cast"
+Ranger,,1,Favored Foe,rider_once_per_turn,1d4,"Tasha's optional; 1d6 at 6, 1d8 at 14; PB uses; concentration"
+Ranger,,5,Extra Attack,extra_attack,2,
+Ranger,,20,Foe Slayer,rider_once_per_turn,WIS,"Add WIS to one attack or damage roll per turn"
+Ranger,Hunter,3,Colossus Slayer,rider_once_per_turn,1d8,"Target below its HP max"
+Ranger,Hunter,15,Uncanny Dodge,first_hit_halve,,"One of three options"
+Ranger,Gloom Stalker,3,Dread Ambusher,nova,,"First turn: +10 ft, extra attack +1d8 — not modelled"
+Ranger,Gloom Stalker,11,Stalker's Flurry,extra_attack_on_miss,1,
+Ranger,Horizon Walker,3,Planar Warrior,rider_once_per_turn,1d8 force,"Bonus action; 2d8 at 11"
+Ranger,Monster Slayer,3,Slayer's Prey,rider_once_per_turn,1d6,"Bonus action"
+Ranger,Fey Wanderer,3,Dreadful Strikes,rider_once_per_turn,1d4 psychic,"1d6 at 11"
+Ranger,Swarmkeeper,3,Gathered Swarm,rider_once_per_turn,1d6 piercing,"1d8 at 11"
+Ranger,Beast Master,3,Ranger's Companion,companion,,"Out of scope (v1)"
+Ranger,Drakewarden,3,Drake Companion,companion,,"Out of scope (v1)"
+Warlock,,1,Eldritch Blast,cantrip,1d10 force per beam,"2 beams at 5, 3 at 11, 4 at 17"
+Warlock,,2,Agonizing Blast,damage_bonus,CHA per beam,Invocation
+Warlock,,1,Hex,rider_per_hit,1d6 necrotic,"Spell; concentration; rides weapon and spell attacks"
+Warlock,,3,Pact of the Blade,weapon,,"Thirsting Blade (5): Extra Attack; Lifedrinker (12): +CHA necrotic per hit; Eldritch Smite (5): 1d8 + 1d8/slot level force once per turn"
+Warlock,Hexblade,1,Hexblade's Curse,rider_per_hit,PB,"Crit on 19-20 vs cursed target; 1/short rest"
+Warlock,Hexblade,1,Hex Warrior,ability,CHA for weapon,"Medium armor + shields"
+Warlock,Genie,1,Genie's Wrath,rider_once_per_turn,PB,
+Warlock,Undead,6,Grave Touched,rider_once_per_turn,+1 damage die,"While in Form of Dread (PB uses)"
+Warlock,Fathomless,1,Tentacle of the Deeps,bonus_attack,1d8 cold spell attack,"2d8 at 10; PB uses/long rest"
+Warlock,Celestial,6,Radiant Soul,damage_bonus,CHA,"One radiant/fire damage roll per spell cast"
+Cleric,,1,Spiritual Weapon,bonus_attack,1d8 + WIS force (2nd-level slot),"+1d8 per two slot levels above 2nd; melee spell attack"
+Cleric,,8,Divine Strike,rider_once_per_turn,1d8,"Death/Forge/Life/Nature/Order/Tempest/Trickery/Twilight/War; 2d8 at 14; weapon attacks only"
+Cleric,,8,Potent Spellcasting,damage_bonus,WIS to cantrips,"Arcana/Grave/Knowledge/Light/Peace"
+Cleric,,8,Blessed Strikes,rider_once_per_turn,1d8 radiant,"Tasha's optional replacement; cantrip or weapon"
+Cleric,War,1,War Priest,bonus_attack,weapon,"WIS mod uses/long rest"
+Cleric,Death,2,Touch of Death,rider_once_per_turn,5 + 2×level necrotic,"Channel Divinity; melee hit"
+Bard,,1,Bardic Inspiration,die,d6,"d8 at 5, d10 at 10, d12 at 15"
+Bard,Swords,3,Blade Flourish,rider_once_per_turn,Bardic Inspiration die,"Master's Flourish (14): d6 without spending"
+Bard,Swords,6,Extra Attack,extra_attack,2,
+Bard,Valor,6,Extra Attack,extra_attack,2,
+Bard,Valor,14,Battle Magic,bonus_attack,weapon,"After casting a bard spell; not modelled"
+Bard,Whispers,3,Psychic Blades,rider_once_per_turn,2d6 psychic,"3d6 at 5, 5d6 at 10, 8d6 at 15; one Bardic Inspiration"
+Druid,,1,Shillelagh,weapon,1d8 WIS (club/quarterstaff),Cantrip
+Druid,Moon,2,Circle Forms,wild_shape,CR 1,"CR = level/3 from 6th; elementals at 10"
+Druid,Spores,2,Symbiotic Entity,rider_per_hit,1d6 necrotic,"Melee weapon hits; costs a Wild Shape use"
+Druid,Spores,2,Halo of Spores,reaction_save,1d4 necrotic,"1d6 at 6, 1d8 at 10, 1d10 at 14; CON save; doubled under Symbiotic Entity"
+Druid,Stars,2,Starry Form (Archer),bonus_attack,1d8 + WIS radiant spell attack,"2d8 at 10"
+Druid,Wildfire,6,Enhanced Bond,damage_bonus,1d8 to fire spell,
+Artificer,Battle Smith,3,Battle Ready,ability,INT for magic weapons,
+Artificer,Battle Smith,5,Extra Attack,extra_attack,2,
+Artificer,Battle Smith,9,Arcane Jolt,rider_once_per_turn,2d6 force,"4d6 at 15; INT uses/long rest"
+Artificer,Armorer,3,Thunder Gauntlets,weapon,1d8 thunder INT,Guardian
+Artificer,Armorer,3,Lightning Launcher,weapon,1d6 lightning INT + 1d6 once per turn,Infiltrator
+Artificer,Armorer,5,Extra Attack,extra_attack,2,
+Artificer,Artillerist,3,Eldritch Cannon,bonus_attack,2d8 force spell attack,"3d8 at 9"
+Artificer,Artillerist,5,Arcane Firearm,damage_bonus,1d8 to one spell roll,
+Artificer,Alchemist,5,Alchemical Savant,damage_bonus,INT,"Acid/fire/necrotic/poison spells"
+Wizard,Evocation,6,Potent Cantrip,half_on_save,,
+Wizard,Evocation,10,Empowered Evocation,damage_bonus,INT,"Evocation spells"
+Wizard,Bladesinging,2,Bladesong,ac_bonus,INT,"PB uses"
+Wizard,Bladesinging,6,Extra Attack,extra_attack,2,"One attack may be a cantrip"
+Wizard,Bladesinging,14,Song of Victory,damage_bonus,INT,"Melee weapon damage while Bladesong"
+Sorcerer,,3,Quickened Spell,bonus_action_cantrip,2 sorcery points,
+Sorcerer,Draconic,1,Draconic Resilience,ac_formula,13+dex,
+Sorcerer,Draconic,6,Elemental Affinity,damage_bonus,CHA,"Spells of the dragon's damage type"
