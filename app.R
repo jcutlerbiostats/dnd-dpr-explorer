@@ -39,6 +39,17 @@ ABILITY_DEFAULTS <- list(
 # mobile-first: the sidebar collapses to a toggle on phones, value boxes wrap,
 # paired cards stack below the lg breakpoint, tables and the tab strip scroll sideways
 MOBILE_CSS <- "
+  /* Flatly-like palette without a Sass compile */
+  .bslib-page-title.navbar, .navbar { background: #2c3e50 !important; color: #fff; }
+  .navbar .navbar-brand, .bslib-page-title { color: #fff !important; }
+  .bg-primary { background-color: #2c3e50 !important; }
+  .bg-danger { background-color: #e74c3c !important; }
+  .nav-tabs .nav-link { color: #18bc9c; }
+  .nav-tabs .nav-link.active { color: #2c3e50; }
+  .btn-outline-primary { color: #2c3e50; border-color: #2c3e50; }
+  .btn-outline-primary:hover { background: #2c3e50; color: #fff; }
+  .accordion-button:not(.collapsed) { background: #ecf0f1; color: #2c3e50; }
+  .irs--shiny .irs-bar, .irs--shiny .irs-single, .irs--shiny .irs-from, .irs--shiny .irs-to { background: #2c3e50; border-color: #2c3e50; }
   /* tab strip: one scrollable row, never wraps */
   .bslib-card .card-header .nav, .nav-tabs, .nav-underline, .card-header-tabs {
     flex-wrap: nowrap !important; overflow-x: auto; overflow-y: hidden; white-space: nowrap; scrollbar-width: thin; }
@@ -91,7 +102,10 @@ PLOT_JS <- "
 ui <- page_sidebar(
   title = "D&D 5e DPR explorer",
   fillable = FALSE,      # natural heights; the page scrolls (better on phones than viewport-filling cards)
-  theme = bs_theme(version = 5, bootswatch = "flatly"),
+  # Plain bs_theme(): bslib ships it precompiled. Any customisation (bootswatch, colours) makes
+  # bslib compile Sass with libsass inside WebAssembly at start-up, which trapped the R process on
+  # iOS Safari (blank page). The Flatly-like look is reproduced with the CSS overrides below.
+  theme = bs_theme(version = 5),
   sidebar = sidebar(width = 340, open = list(desktop = "open", mobile = "closed"),
     accordion(open = c("Character", "Class features"),
       accordion_panel("Character",

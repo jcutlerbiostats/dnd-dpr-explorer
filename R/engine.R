@@ -8,10 +8,9 @@
 # Offense:  round_dpr(events, attack_bonus, target_ac, ...)
 # Defense:  damage_taken(enemy_attacks, ac, ...)
 
-library(magrittr)
-library(dplyr)
-library(purrr)
-library(tibble)
+suppressPackageStartupMessages({   # attach messages land in the browser console as "errors" under webR
+  library(magrittr); library(dplyr); library(purrr); library(tibble)
+})
 
 ROLL_MODES <- c("flat", "advantage", "disadvantage", "elven_accuracy")
 

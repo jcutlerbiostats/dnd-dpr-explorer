@@ -13,8 +13,13 @@
     box.textContent = 'DPR explorer diagnostics\n' + navigator.userAgent + '\n' + lines.join('\n');
   }
   window.addEventListener('error', function (e) { show('Error: ' + (e.message || e) + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); });
-  window.addEventListener('unhandledrejection', function (e) { var r = e.reason; show('Rejection: ' + (r && (r.stack || r.message) || r)); });
-  var ce = console.error; console.error = function () { try { show('console.error: ' + Array.prototype.slice.call(arguments).join(' ').slice(0, 300)); } catch (x) {} ce.apply(console, arguments); };
+  window.addEventListener('unhandledrejection', function (e) { var r = e.reason || {};
+    show('Rejection: ' + (r.name || '') + ' ' + (r.message || (typeof r === 'string' ? r : '')) + '\n' + String(r.stack || '').split('\n').slice(0, 4).join('\n')); });
+  var ce = console.error; console.error = function () {
+    try { var t = Array.prototype.slice.call(arguments).join(' ');
+      // webR routes R's stderr through console.error; only surface lines that look like real errors
+      if (!/^preload error:\s*$/.test(t) && (/error|Error|cannot|failed|no package/.test(t) || !/^preload error:/.test(t))) show('console.error: ' + t.slice(0, 300)); } catch (x) {}
+    ce.apply(console, arguments); };
   if (!('serviceWorker' in navigator)) show('No service worker support in this browser context. Shinylive needs one: open the link directly in Safari or Chrome (not inside Messages, Instagram, Facebook, etc.) and not in Private mode.');
   if (typeof WebAssembly === 'undefined') show('WebAssembly is not available in this browser.');
   if (typeof SharedArrayBuffer === 'undefined') lines.push('(info) SharedArrayBuffer unavailable — using the slower PostMessage channel; this is normal on GitHub Pages.');
