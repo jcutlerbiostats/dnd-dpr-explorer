@@ -46,7 +46,7 @@ Pages is configured with **build type = GitHub Actions** (set via `gh api repos/
 |---|---|
 | `scripts/export_shinylive.R` | Copies only the app files to a staging dir and calls `shinylive::export()`; keeps notes, tests and the `.Rproj` out of the bundle. |
 | `.github/workflows/deploy.yml` | Build + deploy on push to `main` (and manual `workflow_dispatch`). |
-| `www/plotly.min.js` | plotly.js (3.7 MB) shipped with the app and loaded with a plain `tags$script` before Shiny connects — see gotcha 2. |
+| `www/plotly.min.js` | plotly.js (3.7 MB) shipped with the app and loaded with a plain `tags$script`; the only charting dependency now (no plotly R package). |
 | `.gitignore` | ignores `_site/`, `.Rproj.user/`, `.Rhistory`, `.DS_Store`. |
 | `README.md` | short public-facing description. |
 
@@ -61,6 +61,11 @@ Pages is configured with **build type = GitHub Actions** (set via `gh api repos/
 - **Not yet verified on a real phone** — Chrome on the Mac won't shrink below ~500 px and Shinylive's service worker refuses to run inside an iframe wrapper. James will report anything that looks off.
 
 ---
+## Phone fix (2026-11-10, after the first live test)
+James's phone showed a blank page after the loading spinner; his brother got a GitHub 404.
+- **404:** every push to `main` redeploys and Pages serves a 404 for a minute or two mid-deploy; the brother opened the link during one of the notes-only redeploys. The workflow now ignores `*.md`, `tests/**` and the `.Rproj`, so only app changes redeploy.
+- **Blank page:** the bundle downloaded ~68 MB of WebAssembly (44 MB of R packages) and iOS WebKit kills the page when the decompressed heap grows too large. The plotly *R package* alone dragged in ggplot2, htmlwidgets, knitr, rmarkdown, stringi (13 MB), data.table, httr and openssl. Fix: the plotly R package, readr and tidyr are gone. Chart specs are built as plain R lists and sent with `session$sendCustomMessage("dpr-plot", …)`; a 20-line script in `app.R` draws them with `Plotly.react` and re-draws deferred charts when a tab is shown (`shown.bs.tab`). CSVs are read with base `read.csv`. **Package downloads: 44 MB → 3.7 MB** (dplyr, purrr, tibble and their deps only). Charts are drawn only while their tab is active (`plot_when()` gates on `input$main_tab`), preserving the old suspend-when-hidden laziness.
+
 ## webR / Shinylive gotchas found (all fixed, keep in mind when editing)
 1. **`munsell` missing.** Shinylive's bundled webR is R 4.4 with ggplot2 3.5.2 / scales 1.3.0, older than the local library, and the exporter resolves dependencies from *local* metadata. Result: "there is no package called 'munsell'" and a blank page. Fix: `requireNamespace("munsell", quietly = TRUE)` near the top of `app.R` so it gets bundled (plotly loads ggplot2, which needs it).
 2. **"Plotly is not defined".** Shinylive injects htmlwidget scripts asynchronously, so the first chart render could run before the 3.5 MB plotly.js arrived; the exception aborted Shiny's message handling and left every output greyed. Fix: plotly.js in `www/`, loaded synchronously as a body `<script>`.

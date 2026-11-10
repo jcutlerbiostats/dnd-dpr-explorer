@@ -4,6 +4,10 @@ name: Deploy Shinylive app to GitHub Pages
 on:
   push:
     branches: [main]
+    paths-ignore:            # notes-only commits must not trigger a redeploy (Pages 404s briefly mid-deploy)
+      - '**.md'
+      - 'tests/**'
+      - '*.Rproj'
   workflow_dispatch:
 
 permissions:
@@ -32,10 +36,7 @@ jobs:
             cran::bslib
             cran::dplyr
             cran::purrr
-            cran::tidyr
-            cran::readr
-            cran::plotly
-            cran::munsell
+            cran::tibble
             cran::httpuv
       - name: Export Shinylive site
         run: Rscript scripts/export_shinylive.R

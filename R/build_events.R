@@ -13,11 +13,12 @@
 # 
 
 # Libraries --------------------------------------------------------------------
-library(readr)
+# CSVs are read with base R (readr would add ~3 MB of WebAssembly packages for phone visitors)
+read_csv_base <- function(path) { d <- read.csv(path, stringsAsFactors = FALSE, check.names = FALSE, na.strings = c("", "NA"), encoding = "UTF-8"); tibble::as_tibble(d) }
 
 DATA_DIR <- if (dir.exists("data")) "data" else file.path("..", "..", "data")
-CLASSES  <- read_csv(file.path(DATA_DIR, "classes.csv"),  show_col_types = FALSE)
-WEAPONS  <- read_csv(file.path(DATA_DIR, "weapons.csv"),  show_col_types = FALSE)
+CLASSES  <- read_csv_base(file.path(DATA_DIR, "classes.csv"))
+WEAPONS  <- read_csv_base(file.path(DATA_DIR, "weapons.csv"))
 source(file.path(dirname(DATA_DIR), "R", "defense.R"), local = TRUE)   # DATA_DIR is "data" or "../../data"
 
 proficiency_bonus <- function(level) 2 + (level - 1) %/% 4
@@ -743,8 +744,8 @@ reflect_damage <- function(build, enemy_attacks, def_breakdown) {
 # 
 # Cantrip helpers (Phase 4) ------------------------------------------------------
 # 
-CANTRIPS <- read_csv(file.path(DATA_DIR, "cantrips.csv"), show_col_types = FALSE)
-BEASTS   <- read_csv(file.path(DATA_DIR, "beasts.csv"),   show_col_types = FALSE)
+CANTRIPS <- read_csv_base(file.path(DATA_DIR, "cantrips.csv"))
+BEASTS   <- read_csv_base(file.path(DATA_DIR, "beasts.csv"))
 
 cantrip_tier <- function(level) 1 + (level >= 5) + (level >= 11) + (level >= 17)
 cantrips_for <- function(class) CANTRIPS$name[map_lgl(strsplit(CANTRIPS$classes, "\\|"), ~ class %in% .x)]

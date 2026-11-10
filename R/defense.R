@@ -1,6 +1,6 @@
 # 
 # defense.R — AC construction --------------------------------------------------
-ARMOR <- read_csv(file.path(DATA_DIR, "armor.csv"), show_col_types = FALSE)
+ARMOR <- read_csv_base(file.path(DATA_DIR, "armor.csv"))
 
 # armor_ac(): standard AC from the armor table.
 #   unarmored : NULL, or a function(dex, con, wis) used when armor == "None"

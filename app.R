@@ -3,11 +3,12 @@
 # Phase 4: all 13 classes (casters via fixed routines / cantrip mode).
 # Run:  shiny::runApp()   from the project root
 suppressPackageStartupMessages({
-  library(shiny); library(bslib); library(dplyr); library(purrr); library(plotly)
-  # plotly loads ggplot2, and webR's compiled ggplot2 still links munsell although current
-  # metadata omits it; naming munsell here makes shinylive::export() bundle it (harmless locally)
-  requireNamespace("munsell", quietly = TRUE)
+  library(shiny); library(bslib); library(dplyr); library(purrr)
 })
+# Charts: plotly.js is shipped in www/ and driven directly through a custom message
+# (Plotly.react). The plotly R package is deliberately NOT used: it pulls ggplot2, htmlwidgets,
+# knitr, rmarkdown, stringi, data.table, httr and openssl into the WebAssembly bundle (~35 MB),
+# which is what blew past the iOS WebKit memory limit and gave a blank page on phones.
 source("R/engine.R"); source("R/simulate.R"); source("R/build_events.R"); source("R/plots.R"); source("R/combat.R")
 
 DEFAULT_ARMOR <- c(Barbarian = "None", Fighter = "Chain mail", Rogue = "Studded leather",
@@ -65,9 +66,27 @@ MOBILE_CSS <- "
 vb_row <- function(...) div(class = "vb-row", ...)   # own CSS grid: 2-up on phones, 4-up from lg
 pair   <- function(...) layout_columns(col_widths = breakpoints(sm = 12, lg = 6), fill = FALSE, ...)
 tbl    <- function(id) div(class = "table-responsive", tableOutput(id))
-# fixed-height, non-fill plot box: inside bslib fill containers a plotlyOutput would otherwise
+# fixed-height, non-fill plot box: inside bslib fill containers a plot div would otherwise
 # shrink to the row height (the Combat tab's charts collapsed to ~40px)
-plt    <- function(id, height = "300px") div(style = paste0("height:", height, "; width:100%;"), plotlyOutput(id, height = "100%", width = "100%"))
+plt    <- function(id, height = "300px") div(id = id, class = "dpr-plot", style = paste0("height:", height, "; width:100%;"))
+PLOT_JS <- "
+(function () {
+  var pending = {};
+  function visible(el) { return !!(el && el.offsetParent !== null && el.offsetWidth > 0); }
+  function draw(id, spec) {
+    var el = document.getElementById(id); if (!el) return;
+    if (!visible(el)) { pending[id] = spec; return; }
+    delete pending[id];
+    Plotly.react(el, spec.data, spec.layout, spec.config);
+  }
+  Shiny.addCustomMessageHandler('dpr-plot', function (m) { draw(m.id, m); });
+  function flush() { Object.keys(pending).forEach(function (id) { draw(id, pending[id]); });
+    document.querySelectorAll('.dpr-plot').forEach(function (el) { if (visible(el) && el.data) Plotly.Plots.resize(el); }); }
+  document.addEventListener('shown.bs.tab', function () { setTimeout(flush, 50); });
+  document.addEventListener('shown.bs.collapse', function () { setTimeout(flush, 50); });
+  window.addEventListener('resize', function () { setTimeout(flush, 100); });
+})();
+"
 
 ui <- page_sidebar(
   title = "D&D 5e DPR explorer",
@@ -241,7 +260,8 @@ ui <- page_sidebar(
   # dynamically, and the first widget render can run before the 3.5 MB bundle has arrived
   # ("Plotly is not defined"), which aborts Shiny's message handling and leaves outputs grey.
   tags$script(src = "plotly.min.js"),
-  navset_card_tab(
+  tags$script(HTML(PLOT_JS)),
+  navset_card_tab(id = "main_tab",
     nav_panel("Offense",
       vb_row(
         value_box("Exact DPR", textOutput("off_exact"), theme = "primary"),
@@ -405,41 +425,50 @@ server <- function(input, output, session) {
   off_exact <- reactive({ b <- build_off(); round_dpr(b$events, b$attack_bonus, input$target_ac, b$roll_mode, b$crit_min, b$to_hit_die %||% 0) })
   off_sim   <- reactive({ b <- build_off(); simulate_round(b$events, b$attack_bonus, input$target_ac, b$roll_mode, b$crit_min, b$to_hit_die %||% 0, n = input$nsim, seed = input$seed) })
 
-  # Native plotly with pre-aggregated data: fast in webR (ggplotly is not), tiny JSON, touch-friendly.
-  base_layout <- function(p, xlab, ylab, legend = FALSE) {
-    p %>% plotly::config(displayModeBar = FALSE, responsive = TRUE) %>%
-      plotly::layout(xaxis = list(title = xlab, zeroline = FALSE), yaxis = list(title = ylab, zeroline = FALSE),
-                     margin = list(l = 50, r = 10, t = 20, b = 50), hovermode = "x", font = list(size = 12),
-                     showlegend = legend, legend = list(orientation = "h", x = 0, y = 1.12), bargap = 0.05,
-                     paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)")
+  # Chart specs: plain lists sent to plotly.js (Plotly.react) via a custom message. Data are
+  # pre-aggregated in R so each message is a few KB. I() keeps length-1 vectors as JSON arrays.
+  base_layout <- function(xlab, ylab, legend = FALSE, extra = list()) {
+    modifyList(list(
+      xaxis = list(title = list(text = xlab), zeroline = FALSE), yaxis = list(title = list(text = ylab), zeroline = FALSE),
+      margin = list(l = 50, r = 10, t = 20, b = 50), hovermode = "x", font = list(size = 12),
+      showlegend = legend, legend = list(orientation = "h", x = 0, y = 1.12), bargap = 0.05,
+      paper_bgcolor = "rgba(0,0,0,0)", plot_bgcolor = "rgba(0,0,0,0)", autosize = TRUE), extra)
   }
-  hist_plot <- function(x, exact, fill, xlab, ylab = "Simulated rounds") {
+  PLOT_CONFIG <- list(displayModeBar = FALSE, responsive = TRUE, displaylogo = FALSE)
+  spec <- function(data, layout) list(data = data, layout = layout, config = PLOT_CONFIG)
+  hist_spec <- function(x, exact, fill, xlab, ylab = "Simulated rounds") {
     bw <- max(1, round(diff(range(x)) / 40)); br <- seq(floor(min(x)), max(x) + bw, by = bw)
     h <- hist(x, breaks = br, plot = FALSE)
-    plot_ly(x = h$mids, y = h$counts, type = "bar", width = bw, marker = list(color = fill),
-            hovertemplate = paste0("%{x:.0f}: %{y} rounds<extra></extra>")) %>%
-      plotly::add_segments(x = exact, xend = exact, y = 0, yend = max(h$counts), line = list(color = if (fill == "#2c3e50") "#e74c3c" else "#2c3e50", width = 2),
-                           hovertemplate = paste0("exact mean ", fmt(exact, 2), "<extra></extra>"), inherit = FALSE) %>%
-      base_layout(xlab, ylab)
+    spec(list(
+      list(x = I(h$mids), y = I(h$counts), type = "bar", width = I(rep(bw, length(h$mids))), marker = list(color = fill),
+           hovertemplate = "%{x:.0f}: %{y} rounds<extra></extra>"),
+      list(x = I(c(exact, exact)), y = I(c(0, max(h$counts))), type = "scatter", mode = "lines",
+           line = list(color = if (fill == "#2c3e50") "#e74c3c" else "#2c3e50", width = 2),
+           hovertemplate = paste0("exact mean ", fmt(exact, 2), "<extra></extra>"))),
+      base_layout(xlab, ylab))
   }
-  bar_counts <- function(x, fill, xlab, ylab) {
-    x <- x[!is.na(x)]; if (!length(x)) return(plotly_empty(type = "bar") %>% base_layout(xlab, ylab))
+  bar_spec <- function(x, fill, xlab, ylab) {
+    x <- x[!is.na(x)]
+    if (!length(x)) return(spec(list(list(x = I(0), y = I(0), type = "bar")), base_layout(xlab, ylab)))
     t <- table(factor(x, levels = seq(min(x), max(x))))
-    plot_ly(x = as.numeric(names(t)), y = as.numeric(t), type = "bar", marker = list(color = fill),
-            hovertemplate = "round %{x}: %{y}<extra></extra>") %>% base_layout(xlab, ylab) %>% plotly::layout(xaxis = list(dtick = 1))
+    spec(list(list(x = I(as.numeric(names(t))), y = I(as.numeric(t)), type = "bar", marker = list(color = fill),
+                   hovertemplate = "round %{x}: %{y}<extra></extra>")),
+         base_layout(xlab, ylab, extra = list(xaxis = list(title = list(text = xlab), dtick = 1, zeroline = FALSE))))
   }
-  line_plot <- function(df, x, y, group = NULL, colours, vline = NULL, xlab, ylab) {
-    p <- plot_ly()
-    if (is.null(group)) p <- plotly::add_trace(p, data = df, x = df[[x]], y = round(df[[y]], 2), type = "scatter", mode = "lines+markers",
-                                               line = list(color = colours[1], width = 2), marker = list(color = colours[1]), hovertemplate = "%{x}: %{y}<extra></extra>")
-    else for (i in seq_along(unique(df[[group]]))) { g <- unique(df[[group]])[i]; d <- df[df[[group]] == g, ]
-      p <- plotly::add_trace(p, x = d[[x]], y = round(d[[y]], 2), type = "scatter", mode = "lines+markers", name = g,
-                             line = list(color = colours[(i - 1) %% length(colours) + 1], width = 2), marker = list(color = colours[(i - 1) %% length(colours) + 1]),
-                             hovertemplate = paste0(g, ": %{y}<extra></extra>")) }
-    p <- base_layout(p, xlab, ylab, legend = !is.null(group))
-    if (!is.null(vline)) p <- plotly::layout(p, shapes = list(list(type = "line", x0 = vline, x1 = vline, y0 = 0, y1 = 1, yref = "paper", line = list(dash = "dot", color = "grey"))))
-    p
+  line_spec <- function(df, x, y, group = NULL, colours, vline = NULL, xlab, ylab, dtick = NULL) {
+    groups <- if (is.null(group)) list(NULL) else as.list(unique(df[[group]]))
+    traces <- lapply(seq_along(groups), function(i) { g <- groups[[i]]; d <- if (is.null(g)) df else df[df[[group]] == g, ]
+      col <- colours[(i - 1) %% length(colours) + 1]
+      list(x = I(d[[x]]), y = I(round(d[[y]], 2)), type = "scatter", mode = "lines+markers", name = g %||% "",
+           line = list(color = col, width = 2), marker = list(color = col),
+           hovertemplate = paste0(if (is.null(g)) "" else paste0(g, ": "), "%{y}<extra></extra>")) })
+    lay <- base_layout(xlab, ylab, legend = !is.null(group))
+    if (!is.null(dtick)) lay$xaxis$dtick <- dtick
+    if (!is.null(vline)) lay$shapes <- list(list(type = "line", x0 = vline, x1 = vline, y0 = 0, y1 = 1, yref = "paper", line = list(dash = "dot", color = "grey")))
+    spec(traces, lay)
   }
+  # send a chart only while its tab is showing (keeps the old suspend-when-hidden laziness)
+  plot_when <- function(tab, id, expr) observe({ req(identical(input$main_tab, tab)); session$sendCustomMessage("dpr-plot", c(list(id = id), expr())) })
   fmt <- function(x, d = 1) formatC(x, format = "f", digits = d)
   qtxt <- function(s) sprintf("%s · %s–%s", fmt(s$q50), fmt(s$q5), fmt(s$q95))
   rnd <- function(df) df %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
@@ -449,7 +478,7 @@ server <- function(input, output, session) {
   output$off_q     <- renderText(qtxt(summarize_sim(off_sim())))
   output$off_p0    <- renderText(sprintf("%.1f%%", 100 * mean(off_sim() == 0)))
   output$off_table <- renderTable(rnd(off_exact()$breakdown), striped = TRUE)
-  output$off_hist <- renderPlotly(hist_plot(off_sim(), off_exact()$total, "#2c3e50", "Damage dealt in a round (line = exact mean)"))
+  plot_when("Offense", "off_hist", function() hist_spec(off_sim(), off_exact()$total, "#2c3e50", "Damage dealt in a round (line = exact mean)"))
 
   output$def_exact <- renderText(fmt(def_exact()$total, 2))
   output$def_sim   <- renderText({ s <- summarize_sim(def_sim()); sprintf("%s ± %s", fmt(s$mean, 2), fmt(s$se_mean, 2)) })
@@ -463,7 +492,7 @@ server <- function(input, output, session) {
     b$reflect <- r
     reflect_damage(b, enemy(), def_exact()$breakdown) %>% mutate(across(where(is.numeric), ~ round(.x, 2)))
   })
-  output$def_hist <- renderPlotly(hist_plot(def_sim(), def_exact()$total, "#c0392b", "Damage taken in a round (line = exact mean)"))
+  plot_when("Defense", "def_hist", function() hist_spec(def_sim(), def_exact()$total, "#c0392b", "Damage taken in a round (line = exact mean)"))
 
   rtk <- reactive(rounds_to_threshold(off_sim(), input$target_hp, n = min(input$nsim, 5000), seed = input$seed + 2))
   char_hp <- reactive({ b <- build(); b$hp_override %||% input$hp })
@@ -472,24 +501,22 @@ server <- function(input, output, session) {
   output$rtd_header <- renderText(sprintf("Rounds until the character drops (%d HP%s)", char_hp(), if (!is.null(build()$hp_override)) ", beast form" else ""))
   output$rtk_table <- renderTable(rt_table(rtk()))
   output$rtd_table <- renderTable(rt_table(rtd()))
-  output$rtk_hist  <- renderPlotly(bar_counts(rtk()$rounds, "#2c3e50", "Rounds to reduce target to 0 HP", "Simulated combats"))
-  output$rtd_hist  <- renderPlotly(bar_counts(rtd()$rounds, "#c0392b", "Rounds until character reaches 0 HP", "Simulated combats"))
+  plot_when("Rounds to…", "rtk_hist", function() bar_spec(rtk()$rounds, "#2c3e50", "Rounds to reduce target to 0 HP", "Simulated combats"))
+  plot_when("Rounds to…", "rtd_hist", function() bar_spec(rtd()$rounds, "#c0392b", "Rounds until character reaches 0 HP", "Simulated combats"))
 
   inp_list <- reactive({ inp <- sanitize(collect_inputs()); inp$enemy_mode <- if (isTRUE(input$e_adv)) "advantage" else "flat"
     inp$armor <- inp$armor %||% DEFAULT_ARMOR[[input$class]]; inp })
 
-  output$tradeoff_plot <- renderPlotly({
-    line_plot(tradeoff_curves(inp_list()), "target_ac", "dpr", "variant", c("#2c3e50", "#e67e22", "#27ae60"), input$target_ac, "Target AC", "Expected damage per round")
-  })
-  output$defense_curve_plot <- renderPlotly({
-    line_plot(defense_curve(build(), enemy(), enemy_mode()), "enemy_bonus", "taken", NULL, "#c0392b", input$e_bonus, "Enemy attack bonus", "Expected damage taken per round")
-  })
+  plot_when("Trade-off", "tradeoff_plot", function()
+    line_spec(tradeoff_curves(inp_list()), "target_ac", "dpr", "variant", c("#2c3e50", "#e67e22", "#27ae60"), input$target_ac, "Target AC", "Expected damage per round"))
+  plot_when("Trade-off", "defense_curve_plot", function()
+    line_spec(defense_curve(build(), enemy(), enemy_mode()), "enemy_bonus", "taken", NULL, "#c0392b", input$e_bonus, "Enemy attack bonus", "Expected damage taken per round"))
   prog <- reactive(progression(inp_list(), input$target_ac, enemy(), isTRUE(input$e_adv)))
-  output$progression_plot <- renderPlotly({
-    df <- prog() %>% tidyr::pivot_longer(c(dpr, taken), names_to = "measure", values_to = "value") %>%
-      mutate(measure = recode(measure, dpr = "Damage dealt / round", taken = "Damage taken / round"))
-    line_plot(df, "level", "value", "measure", c("#2c3e50", "#c0392b"), input$level, "Character level", "Expected damage per round") %>% plotly::layout(xaxis = list(dtick = 1))
-  })
+  plot_when("Progression", "progression_plot", function() {
+    pr <- prog()
+    df <- rbind(data.frame(level = pr$level, measure = "Damage dealt / round", value = pr$dpr),
+                data.frame(level = pr$level, measure = "Damage taken / round", value = pr$taken))
+    line_spec(df, "level", "value", "measure", c("#2c3e50", "#c0392b"), input$level, "Character level", "Expected damage per round", dtick = 1) })
   output$progression_table <- renderTable(prog() %>% mutate(across(c(dpr, taken), ~ round(.x, 2))))
 
   combat <- reactive({ b <- build()
@@ -501,9 +528,9 @@ server <- function(input, output, session) {
   output$cb_pdrop  <- renderText(sprintf("%.1f%%", 100 * (1 - combat()$summary$p_win)))
   output$cb_hpleft <- renderText({ s <- combat()$summary; if (is.nan(s$char_hp_left_mean)) "—" else fmt(s$char_hp_left_mean) })
   output$cb_table  <- renderTable(combat()$summary %>% mutate(across(everything(), ~ round(.x, 3))))
-  output$cb_kill_hist  <- renderPlotly(bar_counts(combat()$kill_round, "#2c3e50", "Round the target dies", "Combats"))
-  output$cb_drop_hist  <- renderPlotly(bar_counts(combat()$drop_round, "#c0392b", "Round you drop", "Combats"))
-  output$cb_dealt_hist <- renderPlotly(hist_plot(combat()$dealt_total, mean(combat()$dealt_total), "#2c3e50", "Damage dealt before the combat ended (line = mean)", "Combats"))
+  plot_when("Combat", "cb_kill_hist", function() bar_spec(combat()$kill_round, "#2c3e50", "Round the target dies", "Combats"))
+  plot_when("Combat", "cb_drop_hist", function() bar_spec(combat()$drop_round, "#c0392b", "Round you drop", "Combats"))
+  plot_when("Combat", "cb_dealt_hist", function() hist_spec(combat()$dealt_total, mean(combat()$dealt_total), "#2c3e50", "Damage dealt before the combat ended (line = mean)", "Combats"))
 
   # plain HTML + an inline typeset call: no MathJax dependency object inside renderUI (async
   # dependency rendering is what stalls Shinylive), MathJax itself is loaded once by withMathJax() in the UI

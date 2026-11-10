@@ -4,7 +4,7 @@
 # These rebuild the character under varied inputs and evaluate the closed form,
 # so they are cheap enough to recompute on every input change.
 
-ENEMIES_BY_CR <- read_csv(file.path(DATA_DIR, "enemies_by_cr.csv"), show_col_types = FALSE)
+ENEMIES_BY_CR <- read_csv_base(file.path(DATA_DIR, "enemies_by_cr.csv"))
 
 # DMG "Monster Statistics by Challenge Rating" row -> app inputs.
 # The table's damage/round assumes every attack hits, so it is split into
