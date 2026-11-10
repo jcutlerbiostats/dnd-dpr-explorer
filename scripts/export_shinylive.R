@@ -7,4 +7,12 @@ stage <- file.path(tempdir(), "dpr_stage"); unlink(stage, recursive = TRUE); dir
 ok <- file.copy(c("app.R", "R", "data", "www"), stage, recursive = TRUE)
 stopifnot(all(ok))
 shinylive::export(stage, "_site", quiet = TRUE)
+
+# Inject the diagnostic banner script into the host page (and the editor page) ----
+diag <- paste(readLines("scripts/diag.js", warn = FALSE), collapse = "\n")
+for (f in c("_site/index.html", "_site/edit/index.html")) if (file.exists(f)) {
+  html <- paste(readLines(f, warn = FALSE), collapse = "\n")
+  html <- sub("<head>", paste0("<head>\n<script>", diag, "</script>"), html, fixed = TRUE)
+  writeLines(html, f)
+}
 cat("exported to _site/ (", round(sum(file.info(list.files("_site", recursive = TRUE, full.names = TRUE))$size) / 1e6, 1), "MB )\n")
