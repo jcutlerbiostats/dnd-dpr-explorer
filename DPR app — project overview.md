@@ -12,7 +12,7 @@ status: phases 1–6 complete
 
 A Shiny app that computes **offensive DPR** (expected damage dealt per round) and **expected damage taken per round** for D&D 5e (2014 rules) characters, for all 13 classes and every published subclass, with an exact closed form, a Monte Carlo simulator that cross-checks it, and a stateful whole-combat simulator. Built 2026-11-07 to 2026-11-09 from the two worked barbarian notes.
 
-Run from the project folder: `shiny::runApp()`. Tests: `testthat::test_dir("tests/testthat")`.
+Run from the project folder: `shiny::runApp()`. **Live app:** https://jcutlerbiostats.github.io/dnd-dpr-explorer/ (Shinylive on GitHub Pages; repo [jcutlerbiostats/dnd-dpr-explorer](https://github.com/jcutlerbiostats/dnd-dpr-explorer)). Tests: `testthat::test_dir("tests/testthat")`.
 
 ---
 ## Summary of what is there

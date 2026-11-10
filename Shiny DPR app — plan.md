@@ -6,7 +6,7 @@ tags:
   - shiny
   - plan
 created: 2026-11-07
-status: phase-6-done
+status: deploy-ready
 ---
 # Shiny DPR app — plan
 
@@ -114,6 +114,12 @@ Packages: `shiny`, `bslib`, `dplyr`, `purrr`, `tidyr`, `ggplot2`, `readr`, `test
    - **A. Feats:** −5/+10 (now in the feats list), Polearm Master (bonus-action priority over GWM), Crossbow Expert, Dual Wielder (+1 AC, non-light off-hand), Elven Accuracy, Savage Attacker and Piercer (`reroll_gain()` = E[max of two] − E), Lucky (miss reroll on the first attack via `p_hit_add`), Heavy Armor Master (needs heavy armor), Crusher (later attacks get advantage with P(prior crit); exact mean, independent split in the simulator).
    - **E2. Combat simulator** `R/combat.R` + Combat tab: whole combats with state — damage truncated at the kill, character HP vs the enemy, resource pools spent greedily (`pool` / `pool_cost` on events; `b$pools` per class: slots, surge, superiority, ki, bardic, sorcery, pact, arcane shot, psi, echo, war priest, channel, tentacle), concentration saves (Hex / Hunter's Mark / Favored Foe; War Caster), round-1 nova (Action Surge, Fighting Spirit, Assassinate auto-crit if surprised, Dread Ambusher), Colossus Slayer waits for a damaged target, Toll the Dead d8 in round 1. Outputs: P(win), kill-round and drop-round distributions, total damage per combat. Uncanny Dodge "largest hit" policy available in the Defense simulation.
    - **Still out:** GWM on-kill bonus attack (needs a second target), leveled-spell selection, AoE beyond the credit slider, Bladesinger Song of Defense, Relentless Rage, Deflect Missiles catch-and-throw.
+
+## Deployment (2026-11-09)
+- **Target:** Shinylive on GitHub Pages (free, no server, runs in the browser via webR). shinyapps.io rejected as slow.
+- **Done:** all plots are native plotly (pre-aggregated data; `ggplotly` was far too slow in webR); mobile-first layout (collapsible sidebar, 2-up value boxes on phones, scrollable tab strip and tables, non-fillable page); `scripts/export_shinylive.R`; `.github/workflows/deploy.yml`; local git repo initialised with the first commit. Verified in Chrome against the exported bundle: start-up, class switching, Combat and Formula tabs.
+- **Bugs found only in the browser:** (1) webR's ggplot2 needs `munsell` (hint in app.R); (2) `Plotly is not defined` because Shinylive injects widget scripts asynchronously → plotly.js now shipped in `www/` and loaded synchronously; (3) an **infinite re-render loop**: `reactiveValuesToList(input)` made `build()` depend on `plotly_afterplot` events → fixed with an explicit `BUILD_INPUTS` list; (4) `renderUI` removed entirely (static inputs + `conditionalPanel` + `update*`), safer under Shinylive's async UI rendering; (5) bslib's `header=` arg dropped in webR → CSS as body child.
+- **Live (2026-11-10):** https://jcutlerbiostats.github.io/dnd-dpr-explorer/ — repo https://github.com/jcutlerbiostats/dnd-dpr-explorer (public). Pages source = GitHub Actions; every push to `main` redeploys. First load downloads ~30 MB of webR packages; later loads are cached. Test on a real phone.
 
 ## Related
 - [[Barbarian (Level 1) — Offensive & Defensive DPR]]
