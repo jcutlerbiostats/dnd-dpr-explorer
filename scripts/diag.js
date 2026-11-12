@@ -34,7 +34,9 @@
   var ce = console.error; console.error = function () {
     try { var t = Array.prototype.slice.call(arguments).join(' ');
       // webR routes R's stderr through console.error; only surface lines that look like real errors
-      if (!/^preload error:\s*$/.test(t) && (/error|Error|cannot|failed|no package/.test(t) || !/^preload error:/.test(t))) show('console.error: ' + t.slice(0, 300)); } catch (x) {}
+      var body = t.replace(/^preload error:\s*/, '');
+      var fromR = /^preload error:/.test(t);
+      if (body && (!fromR || /\b(Error|error in|cannot|failed|no package|unable)\b/.test(body))) show('console.error: ' + body.slice(0, 300)); } catch (x) {}
     ce.apply(console, arguments); };
   if (!('serviceWorker' in navigator)) show('No service worker support in this browser context. Shinylive needs one: open the link directly in Safari or Chrome (not inside Messages, Instagram, Facebook, etc.) and not in Private mode.');
   if (typeof WebAssembly === 'undefined') show('WebAssembly is not available in this browser.');

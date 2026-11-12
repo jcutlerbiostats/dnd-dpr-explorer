@@ -45,6 +45,27 @@ ABILITY_DEFAULTS <- list(
 # mobile-first: the sidebar collapses to a toggle on phones, value boxes wrap,
 # paired cards stack below the lg breakpoint, tables and the tab strip scroll sideways
 MOBILE_CSS <- "
+  /* flat layout primitives (see comment above the UI) */
+  .sb-sec { margin: 1rem 0 .4rem; padding-top: .6rem; border-top: 1px solid #dee2e6; font-size: .72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #6c757d; }
+  .sb-sec:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+  .row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; }
+  .row2 { display: grid; grid-template-columns: 7fr 5fr; gap: .5rem; align-items: end; }
+  .row2 .btn { margin-bottom: 1rem; }
+  .kpi-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; margin-bottom: .75rem; }
+  @media (min-width: 992px) { .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .kpi { border: 1px solid #dee2e6; border-radius: .5rem; padding: .6rem .9rem; background: #fff; }
+  .kpi-primary { background: #2c3e50; color: #fff; border-color: #2c3e50; }
+  .kpi-danger { background: #e74c3c; color: #fff; border-color: #e74c3c; }
+  .kpi-t { font-size: .78rem; opacity: .85; margin-bottom: .15rem; }
+  .kpi-v { font-size: 1.25rem; line-height: 1.2; font-weight: 500; }
+  .pane { border: 1px solid #dee2e6; border-radius: .5rem; background: #fff; margin-bottom: .75rem; overflow: hidden; }
+  .pane-h { padding: .5rem .9rem; background: #f8f9fa; border-bottom: 1px solid #dee2e6; font-weight: 600; }
+  .pane > :not(.pane-h) { margin: .6rem .9rem; }
+  .pair { display: grid; grid-template-columns: 1fr; gap: .75rem; }
+  @media (min-width: 992px) { .pair { grid-template-columns: 1fr 1fr; } }
+  .nav-pills { flex-wrap: nowrap; overflow-x: auto; margin-bottom: .75rem; scrollbar-width: thin; }
+  .nav-pills .nav-link { white-space: nowrap; }
+  .nav-pills .nav-link.active { background: #2c3e50; }
   /* Flatly-like palette without a Sass compile */
   .bslib-page-title.navbar, .navbar { background: #2c3e50 !important; color: #fff; }
   .navbar .navbar-brand, .bslib-page-title { color: #fff !important; }
@@ -80,12 +101,6 @@ MOBILE_CSS <- "
     .js-plotly-plot .plotly .modebar { display: none; }
   }
 "
-vb_row <- function(...) div(class = "vb-row", ...)   # own CSS grid: 2-up on phones, 4-up from lg
-pair   <- function(...) layout_columns(col_widths = breakpoints(sm = 12, lg = 6), fill = FALSE, ...)
-tbl    <- function(id) div(class = "table-responsive", tableOutput(id))
-# fixed-height, non-fill plot box: inside bslib fill containers a plot div would otherwise
-# shrink to the row height (the Combat tab's charts collapsed to ~40px)
-plt    <- function(id, height = "300px") div(id = id, class = "dpr-plot", style = paste0("height:", height, "; width:100%;"))
 PLOT_JS <- "
 (function () {
   var pending = {};
@@ -106,6 +121,22 @@ PLOT_JS <- "
 "
 
 stage("helpers defined; building UI")
+# Flat UI. iOS Safari gives the WebAssembly R process a small call stack, and Shiny renders the
+# tag tree recursively, so every level of nesting costs R frames: the accordion + nested
+# conditionalPanel + radio-button version (15 tags deep) overflowed on iPhone while a 7-deep
+# bslib page worked. Rules here: no accordion, no nested conditionalPanel, selects instead of
+# radio groups, pill tabs instead of card tabs, plain styled divs instead of value_box/card/
+# layout_columns. Keep the deepest branch at or below ~8 tags.
+sec   <- function(title) tags$h6(class = "sb-sec", title)
+sel   <- function(id, label, choices, selected = NULL) selectInput(id, label, choices, selected, selectize = FALSE)
+row3  <- function(...) div(class = "row3", ...)
+kpis  <- function(...) div(class = "kpi-row", ...)
+kpi   <- function(title, id, cls = "") div(class = paste("kpi", cls), div(class = "kpi-t", title), textOutput(id, container = function(...) div(class = "kpi-v", ...)))
+panel <- function(title, ...) div(class = "pane", if (!is.null(title)) div(class = "pane-h", title), ...)
+tbl   <- function(id) tagAppendAttributes(tableOutput(id), class = "table-responsive")
+plt   <- function(id, height = "300px") div(id = id, class = "dpr-plot", style = paste0("height:", height, "; width:100%;"))
+pair  <- function(...) div(class = "pair", ...)
+
 ui <- page_sidebar(
   title = "D&D 5e DPR explorer",
   fillable = FALSE,      # natural heights; the page scrolls (better on phones than viewport-filling cards)
@@ -114,167 +145,149 @@ ui <- page_sidebar(
   # iOS Safari (blank page). The Flatly-like look is reproduced with the CSS overrides below.
   theme = bs_theme(version = 5),
   sidebar = sidebar(width = 340, open = list(desktop = "open", mobile = "closed"),
-    accordion(open = c("Character", "Class features"),
-      accordion_panel("Character",
-        selectInput("class", "Class", names(CLASS_SUBCLASSES), "Barbarian", selectize = FALSE),
-        selectInput("subclass", "Subclass", CLASS_SUBCLASSES$Barbarian, selectize = FALSE),
-        conditionalPanel("input.class == 'Barbarian' && ['Totem Warrior','Storm Herald','Wild Magic','Beast','Giant'].indexOf(input.subclass) > -1",
-          selectInput("option", "Subclass option", c("Bear"), selectize = FALSE)),
-        sliderInput("level", "Level", 1, 20, 5, step = 1),
-        layout_columns(col_widths = c(4, 4, 4),
-          numericInput("str", "STR", 3, -1, 7), numericInput("dex", "DEX", 2, -1, 7),
-          numericInput("con", "CON", 3, -1, 7)),
-        layout_columns(col_widths = c(4, 4, 4),
-          numericInput("int", "INT", 0, -1, 7), numericInput("wis", "WIS", 1, -1, 7),
-          numericInput("cha", "CHA", 0, -1, 7)),
-        helpText("Ability modifiers, not scores."),
-        selectInput("weapon", "Weapon", WEAPONS$name, "Greataxe", selectize = FALSE),
-        checkboxInput("shield", "Shield", FALSE),
-        checkboxInput("offhand", "Off-hand attack", FALSE),
-        conditionalPanel("input.offhand", selectInput("offhand_weapon", "Off-hand weapon", WEAPONS$name[!WEAPONS$two_handed & !WEAPONS$ranged & !WEAPONS$heavy], "Shortsword", selectize = FALSE)),
-        conditionalPanel("input.class != 'Monk' && !(input.class == 'Sorcerer' && input.subclass == 'Draconic')",
-          selectInput("armor", "Armor (None = Unarmored Defense for Barbarian)", ARMOR$name, "None", selectize = FALSE)),
-        conditionalPanel("input.class == 'Monk'", helpText("Monk: Unarmored Defense (10 + DEX + WIS), no armor or shield.")),
-        conditionalPanel("input.class == 'Sorcerer' && input.subclass == 'Draconic'", helpText("Draconic Resilience: AC 13 + DEX.")),
-        layout_columns(col_widths = c(4, 4, 4), numericInput("magic", "Magic +X", 0, 0, 3), numericInput("magic_ndice", "Extra dice", 0, 0, 4), numericInput("magic_die", "die", 6, 4, 12)),
-        checkboxGroupInput("feats", "Feats", FEATS),
-        conditionalPanel("input.feats && input.feats.indexOf('Lucky') > -1", sliderInput("lucky_p", "Lucky: fraction of rounds a point rerolls a missed first attack", 0, 1, 0.3, 0.05)),
-        numericInput("hp", "Character HP (for rounds-to-drop)", 55, 1, 400)
-      ),
-      # Class features: every control is static and shown with conditionalPanel. Shinylive's
-      # async renderUI can stall the client under the PostMessage channel, so no renderUI here.
-      accordion_panel("Class features",
-        conditionalPanel("['Fighter','Paladin','Ranger','Bard'].indexOf(input.class) > -1 && !(input.class == 'Bard' && input.subclass != 'Swords')",
-          selectInput("fighting_style", "Fighting Style", FIGHTING_STYLES$Fighter, "None", selectize = FALSE)),
-        conditionalPanel("input.fighting_style == 'Superior Technique' && input.class == 'Fighter'",
-          sliderInput("superior_p", "Superior Technique: fraction of hits spending the d6", 0, 1, 0.1, 0.05)),
-        conditionalPanel("['Warlock','Cleric','Bard','Druid','Wizard','Sorcerer'].indexOf(input.class) > -1 || (input.class == 'Artificer' && (['Artillerist','Alchemist'].indexOf(input.subclass) > -1 || input.level < 3)) || (input.class == 'Fighter' && input.subclass == 'Eldritch Knight' && input.level >= 7)",
-          radioButtons("routine", "Round routine", c("Attack action"), "Attack action")),
-        conditionalPanel("(input.class == 'Fighter' && input.subclass == 'Eldritch Knight' && input.level >= 7) || (input.class == 'Wizard' && input.subclass == 'Bladesinging')",
-          selectInput("cantrip", "Weapon cantrip / cantrip", c("Booming Blade", "Green-Flame Blade", "Fire Bolt"), selectize = FALSE)),
-        # Barbarian
-        conditionalPanel("input.class == 'Barbarian'",
-          checkboxInput("raging", "Raging", TRUE),
-          checkboxInput("reckless", "Reckless Attack (lvl 2+)", TRUE),
-          checkboxInput("bonus_attack", "Use subclass bonus action each turn", TRUE),
-          conditionalPanel("input.subclass == 'Beast' && input.level >= 10", sliderInput("inf_fury_p", "Infectious Fury: fraction of rounds available", 0, 1, 0.5, 0.1))),
-        # Fighter
-        conditionalPanel("input.class == 'Fighter'",
-          sliderInput("surge_p", "Action Surge: fraction of rounds", 0, 1, 0.2, 0.05),
-          conditionalPanel("input.subclass == 'Battle Master'", sliderInput("maneuver_p", "Fraction of hits spending a superiority die", 0, 1, 0.3, 0.05)),
-          conditionalPanel("input.subclass == 'Samurai'", checkboxInput("samurai_fs", "Fighting Spirit active this turn (advantage)", FALSE)),
-          conditionalPanel("input.subclass == 'Rune Knight'", checkboxInput("rune_might", "Giant's Might active", TRUE)),
-          conditionalPanel("input.subclass == 'Echo Knight'", sliderInput("echo_p", "Unleash Incarnation: fraction of rounds", 0, 1, 0.5, 0.05)),
-          conditionalPanel("input.subclass == 'Cavalier'", sliderInput("cavalier_p", "Unwavering Mark attack: fraction of rounds", 0, 1, 0.3, 0.05)),
-          conditionalPanel("input.subclass == 'Arcane Archer'", sliderInput("arcane_p", "Arcane Shot: fraction of rounds", 0, 1, 0.4, 0.05)),
-          conditionalPanel("input.subclass == 'Psi Warrior'", sliderInput("psi_p", "Psionic Strike: fraction of rounds", 0, 1, 0.5, 0.05))),
-        # Rogue
-        conditionalPanel("input.class == 'Rogue'",
-          sliderInput("sneak_p", "Sneak Attack available: fraction of rounds", 0, 1, 0.9, 0.05),
-          conditionalPanel("input.subclass == 'Soulknife' && input.level >= 9", sliderInput("homing_p", "Homing Strikes: fraction of misses a psionic die is spent on", 0, 1, 0.5, 0.05)),
-          conditionalPanel("input.subclass == 'Phantom'", sliderInput("wails_p", "Wails from the Grave: fraction of rounds (needs multi-target credit)", 0, 1, 0.5, 0.05))),
-        conditionalPanel("(input.class == 'Rogue' && input.subclass != 'Soulknife') || (input.class == 'Warlock' && input.routine == 'Pact weapon')",
-          selectInput("weapon_cantrip", "Weapon cantrip instead of the Attack action", c("None", "Booming Blade", "Green-Flame Blade"), selectize = FALSE)),
-        conditionalPanel("(input.class == 'Rogue' && input.level >= 5) || (input.class == 'Ranger' && input.subclass == 'Hunter' && input.level >= 15)",
-          checkboxInput("uncanny", "Uncanny Dodge (halve first hit each round)", TRUE)),
-        # Monk
-        conditionalPanel("input.class == 'Monk'",
-          sliderInput("flurry_p", "Flurry of Blows: fraction of rounds (1 ki)", 0, 1, 0.5, 0.05),
-          conditionalPanel("input.subclass == 'Kensei'", checkboxInput("kensei_parry", "Agile Parry (+2 AC)", TRUE)),
-          conditionalPanel("(input.subclass == 'Kensei' && input.level >= 6) || input.subclass == 'Mercy'", sliderInput("ki_rider_p", "Deft Strike / Hand of Harm: fraction of rounds (1 ki)", 0, 1, 0.5, 0.05)),
-          conditionalPanel("input.subclass == 'Kensei' && input.level >= 11", sliderInput("sharpen", "Sharpen the Blade: ki spent (+hit/+dmg)", 0, 3, 0, 1)),
-          conditionalPanel("input.subclass == 'Astral Self'", checkboxInput("astral_on", "Astral arms active", TRUE))),
-        # Paladin
-        conditionalPanel("input.class == 'Paladin' && input.level >= 2",
-          radioButtons("smite_policy", "Divine Smite policy", c("Never" = "none", "On every hit (fraction below)" = "every", "On crits only" = "crits"), "crits"),
-          sliderInput("smite_slot", "Smite slot level", 1, 5, 1, 1),
-          sliderInput("smite_p", "Fraction of hits smited (policy = every hit)", 0, 1, 0.5, 0.05),
-          checkboxInput("undead", "Target is undead or fiend (+1d8)", FALSE)),
-        conditionalPanel("input.class == 'Paladin' && input.subclass == 'Devotion'", checkboxInput("sacred_weapon", "Sacred Weapon active (+CHA to hit)", FALSE)),
-        conditionalPanel("input.class == 'Paladin' && input.subclass == 'Vengeance'", checkboxInput("vow", "Vow of Enmity active (advantage)", FALSE)),
-        # Ranger
-        conditionalPanel("input.class == 'Ranger'",
-          radioButtons("mark", "Mark", c("Hunter's Mark (1d6 per hit)" = "hunters_mark", "Favored Foe (1d4/1d6/1d8 once per turn)" = "favored_foe", "None" = "none"), "hunters_mark"),
-          conditionalPanel("input.subclass == 'Hunter'",
-            radioButtons("hunter3", "Hunter's Prey (3rd)", c("Colossus Slayer", "Giant Killer", "Horde Breaker")),
-            sliderInput("colossus_p", "Colossus Slayer: fraction of rounds target is below max HP", 0, 1, 0.9, 0.05)),
-          conditionalPanel("input.subclass == 'Beast Master'", selectInput("companion", "Primal companion (Tasha's)", c("Beast of the Land", "Beast of the Sea", "Beast of the Sky"), selectize = FALSE))),
-        conditionalPanel("(input.class == 'Ranger' && ['Beast Master','Drakewarden'].indexOf(input.subclass) > -1) || (input.class == 'Artificer' && input.subclass == 'Battle Smith')",
-          checkboxInput("command", "Command the companion each turn (bonus action)", TRUE)),
-        # Warlock
-        conditionalPanel("input.class == 'Warlock'",
-          checkboxInput("agonizing", "Agonizing Blast (lvl 2+)", TRUE),
-          checkboxInput("hex", "Hex up (1d6 per hit)", TRUE),
-          conditionalPanel("input.routine == 'Pact weapon'",
-            checkboxInput("thirsting", "Thirsting Blade (lvl 5+)", TRUE),
-            sliderInput("esmite_p", "Eldritch Smite: fraction of rounds (lvl 5+)", 0, 1, 0, 0.05)),
-          conditionalPanel("input.subclass == 'Hexblade'", checkboxInput("curse", "Hexblade's Curse on target (+PB, crit 19)", TRUE)),
-          conditionalPanel("input.subclass == 'Undead'", checkboxInput("dread", "Form of Dread active (lvl 6+: +1 die once/turn)", TRUE)),
-          conditionalPanel("input.subclass == 'Fathomless'", sliderInput("tentacle_p", "Tentacle of the Deeps: fraction of rounds", 0, 1, 0.5, 0.05))),
-        # Cleric
-        conditionalPanel("input.class == 'Cleric'",
-          checkboxInput("spiritual", "Spiritual Weapon up (lvl 3+, bonus action)", TRUE),
-          sliderInput("sw_slot", "Spiritual Weapon slot level", 2, 5, 2, 1),
-          checkboxInput("blessed", "Blessed Strikes (Tasha's) instead of Divine Strike / Potent Spellcasting", FALSE),
-          conditionalPanel("input.subclass == 'War'", sliderInput("war_priest_p", "War Priest bonus attack: fraction of rounds", 0, 1, 0.3, 0.05)),
-          conditionalPanel("input.subclass == 'Death'", sliderInput("touch_death_p", "Touch of Death: fraction of rounds", 0, 1, 0.2, 0.05))),
-        # Bard
-        conditionalPanel("input.class == 'Bard' && ['Swords','Whispers'].indexOf(input.subclass) > -1",
-          sliderInput("flourish_p", "Bardic Inspiration spent on damage: fraction of rounds", 0, 1, 0.5, 0.05)),
-        # Druid
-        conditionalPanel("input.class == 'Druid'",
-          conditionalPanel("input.subclass == 'Moon'", selectInput("beast", "Wild Shape form (filtered by level)", beasts_for_level(5), selectize = FALSE)),
-          conditionalPanel("input.subclass == 'Spores'",
-            checkboxInput("symbiotic", "Symbiotic Entity active", TRUE),
-            sliderInput("halo_p", "Halo of Spores: fraction of rounds an enemy is within 10 ft", 0, 1, 0.8, 0.05)),
-          conditionalPanel("input.subclass == 'Stars'", checkboxInput("starry", "Starry Form (Archer) active", TRUE))),
-        # Artificer
-        conditionalPanel("input.class == 'Artificer'",
-          conditionalPanel("input.subclass == 'Battle Smith' && input.level >= 9", sliderInput("jolt_p", "Arcane Jolt: fraction of rounds", 0, 1, 0.5, 0.05)),
-          conditionalPanel("input.subclass == 'Armorer'", radioButtons("armor_model", "Armor model", c("Guardian", "Infiltrator"))),
-          conditionalPanel("input.subclass == 'Artillerist'", checkboxInput("cannon", "Eldritch Cannon (force ballista) active", TRUE))),
-        # Wizard / Sorcerer
-        conditionalPanel("input.class == 'Wizard' && input.subclass == 'Bladesinging'", checkboxInput("bladesong", "Bladesong active (+INT AC; Song of Victory at 14)", TRUE)),
-        conditionalPanel("input.class == 'Sorcerer'",
-          conditionalPanel("input.level >= 3", sliderInput("quicken_p", "Quickened Spell (2nd cantrip): fraction of rounds", 0, 1, 0.3, 0.05)),
-          conditionalPanel("input.subclass == 'Draconic'", checkboxInput("affinity", "Elemental Affinity applies (+CHA, lvl 6+)", TRUE)))
-      ),
-      accordion_panel("Party buffs",
-        checkboxInput("bless", "Bless (+1d4 to attack rolls)", FALSE),
-        checkboxInput("haste", "Haste (one extra weapon attack)", FALSE),
-        checkboxInput("adv_source", "Advantage from an ally or condition", FALSE)
-      ),
-      accordion_panel("Target & enemy",
-        layout_columns(col_widths = c(7, 5),
-          selectInput("cr", "DMG preset by CR", ENEMIES_BY_CR$cr, 5),
-          actionButton("load_cr", "Load", class = "btn-sm btn-outline-primary", style = "margin-top: 32px")),
-        helpText("Loads AC, HP, attack bonus, damage split over 2 attacks, and save DC from the DMG table."),
-        sliderInput("target_ac", "Target AC", 8, 25, 15, 1),
-        numericInput("target_hp", "Target HP (for rounds-to-kill)", 90, 1, 1000),
-        numericInput("t_save", "Target saving-throw bonus (for save-based damage)", 2, -2, 12),
-        sliderInput("extra_targets", "Multi-target credit: additional targets in reach", 0, 3, 0, 1),
-        checkboxInput("target_large", "Target is Large or larger (Giant Killer)", FALSE),
-        tags$hr(),
-        numericInput("e_n", "Enemy attacks / round", 2, 1, 8),
-        numericInput("e_bonus", "Enemy attack bonus", 6, 0, 20),
-        layout_columns(col_widths = c(6, 6), numericInput("e_ndice", "Dice", 1, 0, 20), numericInput("e_die", "Die", 8, 0, 20)),
-        numericInput("e_flat", "Flat damage", 4, 0, 50),
-        selectInput("e_type", "Damage type", ALL_DAMAGE_TYPES, "slashing"),
-        checkboxInput("e_melee", "Enemy attacks are melee", TRUE),
-        checkboxInput("e_adv", "Enemy has advantage against you (other than from Reckless Attack)", FALSE)
-      ),
-      accordion_panel("Simulation",
-        sliderInput("nsim", "Simulated rounds", 1000, 50000, 5000, 1000),
-        numericInput("seed", "Seed", 42, 1, 1e6),
-        radioButtons("dodge_policy", "Uncanny Dodge policy (simulation only)", c("React to the first hit" = "first", "React to the largest hit (hindsight)" = "largest")),
-        tags$hr(), tags$b("Combat tab"),
-        sliderInput("max_rounds", "Maximum rounds per combat", 3, 30, 12, 1),
-        checkboxInput("nova", "Round-1 nova (Action Surge, Fighting Spirit, Assassinate, Dread Ambusher)", TRUE),
-        checkboxInput("surprised", "Target is surprised in round 1 (Assassinate auto-crit)", FALSE),
-        numericInput("con_save", "Your CON saving-throw bonus (concentration)", 2, -2, 15),
-        checkboxInput("war_caster", "War Caster (advantage on concentration saves)", FALSE)
-      )
-    )
+    sec("Character"),
+    sel("class", "Class", names(CLASS_SUBCLASSES), "Barbarian"),
+    sel("subclass", "Subclass", CLASS_SUBCLASSES$Barbarian),
+    conditionalPanel("input.class == 'Barbarian' && ['Totem Warrior','Storm Herald','Wild Magic','Beast','Giant'].indexOf(input.subclass) > -1",
+      sel("option", "Subclass option", c("Bear"))),
+    sliderInput("level", "Level", 1, 20, 5, step = 1),
+    row3(numericInput("str", "STR", 3, -1, 7), numericInput("dex", "DEX", 2, -1, 7), numericInput("con", "CON", 3, -1, 7)),
+    row3(numericInput("int", "INT", 0, -1, 7), numericInput("wis", "WIS", 1, -1, 7), numericInput("cha", "CHA", 0, -1, 7)),
+    helpText("Ability modifiers, not scores."),
+    sel("weapon", "Weapon", WEAPONS$name, "Greataxe"),
+    checkboxInput("shield", "Shield", FALSE),
+    checkboxInput("offhand", "Off-hand attack", FALSE),
+    conditionalPanel("input.offhand", sel("offhand_weapon", "Off-hand weapon", WEAPONS$name[!WEAPONS$two_handed & !WEAPONS$ranged & !WEAPONS$heavy], "Shortsword")),
+    conditionalPanel("input.class != 'Monk' && !(input.class == 'Sorcerer' && input.subclass == 'Draconic')",
+      sel("armor", "Armor (None = Unarmored Defense for Barbarian)", ARMOR$name, "None")),
+    conditionalPanel("input.class == 'Monk'", helpText("Monk: Unarmored Defense (10 + DEX + WIS), no armor or shield.")),
+    conditionalPanel("input.class == 'Sorcerer' && input.subclass == 'Draconic'", helpText("Draconic Resilience: AC 13 + DEX.")),
+    row3(numericInput("magic", "Magic +X", 0, 0, 3), numericInput("magic_ndice", "Extra dice", 0, 0, 4), numericInput("magic_die", "die", 6, 4, 12)),
+    checkboxGroupInput("feats", "Feats", FEATS),
+    conditionalPanel("input.feats && input.feats.indexOf('Lucky') > -1", sliderInput("lucky_p", "Lucky: fraction of rounds a point rerolls a missed first attack", 0, 1, 0.3, 0.05)),
+    numericInput("hp", "Character HP (for rounds-to-drop)", 55, 1, 400),
+
+    sec("Class features"),
+    conditionalPanel("['Fighter','Paladin','Ranger'].indexOf(input.class) > -1 || (input.class == 'Bard' && input.subclass == 'Swords')",
+      sel("fighting_style", "Fighting Style", FIGHTING_STYLES$Fighter, "None")),
+    conditionalPanel("input.fighting_style == 'Superior Technique' && input.class == 'Fighter'",
+      sliderInput("superior_p", "Superior Technique: fraction of hits spending the d6", 0, 1, 0.1, 0.05)),
+    conditionalPanel("['Warlock','Cleric','Bard','Druid','Wizard','Sorcerer'].indexOf(input.class) > -1 || (input.class == 'Artificer' && (['Artillerist','Alchemist'].indexOf(input.subclass) > -1 || input.level < 3)) || (input.class == 'Fighter' && input.subclass == 'Eldritch Knight' && input.level >= 7)",
+      sel("routine", "Round routine", c("Attack action"), "Attack action")),
+    conditionalPanel("(input.class == 'Fighter' && input.subclass == 'Eldritch Knight' && input.level >= 7) || (input.class == 'Wizard' && input.subclass == 'Bladesinging')",
+      sel("cantrip", "Weapon cantrip / cantrip", c("Booming Blade", "Green-Flame Blade", "Fire Bolt"))),
+    # Barbarian
+    conditionalPanel("input.class == 'Barbarian'",
+      checkboxInput("raging", "Raging", TRUE),
+      checkboxInput("reckless", "Reckless Attack (lvl 2+)", TRUE),
+      checkboxInput("bonus_attack", "Use subclass bonus action each turn", TRUE)),
+    conditionalPanel("input.class == 'Barbarian' && input.subclass == 'Beast' && input.level >= 10", sliderInput("inf_fury_p", "Infectious Fury: fraction of rounds available", 0, 1, 0.5, 0.1)),
+    # Fighter
+    conditionalPanel("input.class == 'Fighter'", sliderInput("surge_p", "Action Surge: fraction of rounds", 0, 1, 0.2, 0.05)),
+    conditionalPanel("input.class == 'Fighter' && input.subclass == 'Battle Master'", sliderInput("maneuver_p", "Fraction of hits spending a superiority die", 0, 1, 0.3, 0.05)),
+    conditionalPanel("input.class == 'Fighter' && input.subclass == 'Samurai'", checkboxInput("samurai_fs", "Fighting Spirit active this turn (advantage)", FALSE)),
+    conditionalPanel("input.class == 'Fighter' && input.subclass == 'Rune Knight'", checkboxInput("rune_might", "Giant's Might active", TRUE)),
+    conditionalPanel("input.class == 'Fighter' && input.subclass == 'Echo Knight'", sliderInput("echo_p", "Unleash Incarnation: fraction of rounds", 0, 1, 0.5, 0.05)),
+    conditionalPanel("input.class == 'Fighter' && input.subclass == 'Cavalier'", sliderInput("cavalier_p", "Unwavering Mark attack: fraction of rounds", 0, 1, 0.3, 0.05)),
+    conditionalPanel("input.class == 'Fighter' && input.subclass == 'Arcane Archer'", sliderInput("arcane_p", "Arcane Shot: fraction of rounds", 0, 1, 0.4, 0.05)),
+    conditionalPanel("input.class == 'Fighter' && input.subclass == 'Psi Warrior'", sliderInput("psi_p", "Psionic Strike: fraction of rounds", 0, 1, 0.5, 0.05)),
+    # Rogue
+    conditionalPanel("input.class == 'Rogue'", sliderInput("sneak_p", "Sneak Attack available: fraction of rounds", 0, 1, 0.9, 0.05)),
+    conditionalPanel("input.class == 'Rogue' && input.subclass == 'Soulknife' && input.level >= 9", sliderInput("homing_p", "Homing Strikes: fraction of misses a psionic die is spent on", 0, 1, 0.5, 0.05)),
+    conditionalPanel("input.class == 'Rogue' && input.subclass == 'Phantom'", sliderInput("wails_p", "Wails from the Grave: fraction of rounds (needs multi-target credit)", 0, 1, 0.5, 0.05)),
+    conditionalPanel("(input.class == 'Rogue' && input.subclass != 'Soulknife') || (input.class == 'Warlock' && input.routine == 'Pact weapon')",
+      sel("weapon_cantrip", "Weapon cantrip instead of the Attack action", c("None", "Booming Blade", "Green-Flame Blade"))),
+    conditionalPanel("(input.class == 'Rogue' && input.level >= 5) || (input.class == 'Ranger' && input.subclass == 'Hunter' && input.level >= 15)",
+      checkboxInput("uncanny", "Uncanny Dodge (halve first hit each round)", TRUE)),
+    # Monk
+    conditionalPanel("input.class == 'Monk'", sliderInput("flurry_p", "Flurry of Blows: fraction of rounds (1 ki)", 0, 1, 0.5, 0.05)),
+    conditionalPanel("input.class == 'Monk' && input.subclass == 'Kensei'", checkboxInput("kensei_parry", "Agile Parry (+2 AC)", TRUE)),
+    conditionalPanel("input.class == 'Monk' && ((input.subclass == 'Kensei' && input.level >= 6) || input.subclass == 'Mercy')", sliderInput("ki_rider_p", "Deft Strike / Hand of Harm: fraction of rounds (1 ki)", 0, 1, 0.5, 0.05)),
+    conditionalPanel("input.class == 'Monk' && input.subclass == 'Kensei' && input.level >= 11", sliderInput("sharpen", "Sharpen the Blade: ki spent (+hit/+dmg)", 0, 3, 0, 1)),
+    conditionalPanel("input.class == 'Monk' && input.subclass == 'Astral Self'", checkboxInput("astral_on", "Astral arms active", TRUE)),
+    # Paladin
+    conditionalPanel("input.class == 'Paladin' && input.level >= 2",
+      sel("smite_policy", "Divine Smite policy", c("Never" = "none", "On every hit (fraction below)" = "every", "On crits only" = "crits"), "crits"),
+      sliderInput("smite_slot", "Smite slot level", 1, 5, 1, 1),
+      sliderInput("smite_p", "Fraction of hits smited (policy = every hit)", 0, 1, 0.5, 0.05),
+      checkboxInput("undead", "Target is undead or fiend (+1d8)", FALSE)),
+    conditionalPanel("input.class == 'Paladin' && input.subclass == 'Devotion'", checkboxInput("sacred_weapon", "Sacred Weapon active (+CHA to hit)", FALSE)),
+    conditionalPanel("input.class == 'Paladin' && input.subclass == 'Vengeance'", checkboxInput("vow", "Vow of Enmity active (advantage)", FALSE)),
+    # Ranger
+    conditionalPanel("input.class == 'Ranger'",
+      sel("mark", "Mark", c("Hunter's Mark (1d6 per hit)" = "hunters_mark", "Favored Foe (1d4/1d6/1d8 once per turn)" = "favored_foe", "None" = "none"), "hunters_mark")),
+    conditionalPanel("input.class == 'Ranger' && input.subclass == 'Hunter'",
+      sel("hunter3", "Hunter's Prey (3rd)", c("Colossus Slayer", "Giant Killer", "Horde Breaker")),
+      sliderInput("colossus_p", "Colossus Slayer: fraction of rounds target is below max HP", 0, 1, 0.9, 0.05)),
+    conditionalPanel("input.class == 'Ranger' && input.subclass == 'Beast Master'", sel("companion", "Primal companion (Tasha's)", c("Beast of the Land", "Beast of the Sea", "Beast of the Sky"))),
+    conditionalPanel("(input.class == 'Ranger' && ['Beast Master','Drakewarden'].indexOf(input.subclass) > -1) || (input.class == 'Artificer' && input.subclass == 'Battle Smith')",
+      checkboxInput("command", "Command the companion each turn (bonus action)", TRUE)),
+    # Warlock
+    conditionalPanel("input.class == 'Warlock'",
+      checkboxInput("agonizing", "Agonizing Blast (lvl 2+)", TRUE),
+      checkboxInput("hex", "Hex up (1d6 per hit)", TRUE)),
+    conditionalPanel("input.class == 'Warlock' && input.routine == 'Pact weapon'",
+      checkboxInput("thirsting", "Thirsting Blade (lvl 5+)", TRUE),
+      sliderInput("esmite_p", "Eldritch Smite: fraction of rounds (lvl 5+)", 0, 1, 0, 0.05)),
+    conditionalPanel("input.class == 'Warlock' && input.subclass == 'Hexblade'", checkboxInput("curse", "Hexblade's Curse on target (+PB, crit 19)", TRUE)),
+    conditionalPanel("input.class == 'Warlock' && input.subclass == 'Undead'", checkboxInput("dread", "Form of Dread active (lvl 6+: +1 die once/turn)", TRUE)),
+    conditionalPanel("input.class == 'Warlock' && input.subclass == 'Fathomless'", sliderInput("tentacle_p", "Tentacle of the Deeps: fraction of rounds", 0, 1, 0.5, 0.05)),
+    # Cleric
+    conditionalPanel("input.class == 'Cleric'",
+      checkboxInput("spiritual", "Spiritual Weapon up (lvl 3+, bonus action)", TRUE),
+      sliderInput("sw_slot", "Spiritual Weapon slot level", 2, 5, 2, 1),
+      checkboxInput("blessed", "Blessed Strikes (Tasha's) instead of Divine Strike / Potent Spellcasting", FALSE)),
+    conditionalPanel("input.class == 'Cleric' && input.subclass == 'War'", sliderInput("war_priest_p", "War Priest bonus attack: fraction of rounds", 0, 1, 0.3, 0.05)),
+    conditionalPanel("input.class == 'Cleric' && input.subclass == 'Death'", sliderInput("touch_death_p", "Touch of Death: fraction of rounds", 0, 1, 0.2, 0.05)),
+    # Bard
+    conditionalPanel("input.class == 'Bard' && ['Swords','Whispers'].indexOf(input.subclass) > -1",
+      sliderInput("flourish_p", "Bardic Inspiration spent on damage: fraction of rounds", 0, 1, 0.5, 0.05)),
+    # Druid
+    conditionalPanel("input.class == 'Druid' && input.subclass == 'Moon'", sel("beast", "Wild Shape form (filtered by level)", beasts_for_level(5))),
+    conditionalPanel("input.class == 'Druid' && input.subclass == 'Spores'",
+      checkboxInput("symbiotic", "Symbiotic Entity active", TRUE),
+      sliderInput("halo_p", "Halo of Spores: fraction of rounds an enemy is within 10 ft", 0, 1, 0.8, 0.05)),
+    conditionalPanel("input.class == 'Druid' && input.subclass == 'Stars'", checkboxInput("starry", "Starry Form (Archer) active", TRUE)),
+    # Artificer
+    conditionalPanel("input.class == 'Artificer' && input.subclass == 'Battle Smith' && input.level >= 9", sliderInput("jolt_p", "Arcane Jolt: fraction of rounds", 0, 1, 0.5, 0.05)),
+    conditionalPanel("input.class == 'Artificer' && input.subclass == 'Armorer'", sel("armor_model", "Armor model", c("Guardian", "Infiltrator"))),
+    conditionalPanel("input.class == 'Artificer' && input.subclass == 'Artillerist'", checkboxInput("cannon", "Eldritch Cannon (force ballista) active", TRUE)),
+    # Wizard / Sorcerer
+    conditionalPanel("input.class == 'Wizard' && input.subclass == 'Bladesinging'", checkboxInput("bladesong", "Bladesong active (+INT AC; Song of Victory at 14)", TRUE)),
+    conditionalPanel("input.class == 'Sorcerer' && input.level >= 3", sliderInput("quicken_p", "Quickened Spell (2nd cantrip): fraction of rounds", 0, 1, 0.3, 0.05)),
+    conditionalPanel("input.class == 'Sorcerer' && input.subclass == 'Draconic'", checkboxInput("affinity", "Elemental Affinity applies (+CHA, lvl 6+)", TRUE)),
+
+    sec("Party buffs"),
+    checkboxInput("bless", "Bless (+1d4 to attack rolls)", FALSE),
+    checkboxInput("haste", "Haste (one extra weapon attack)", FALSE),
+    checkboxInput("adv_source", "Advantage from an ally or condition", FALSE),
+
+    sec("Target & enemy"),
+    div(class = "row2", sel("cr", "DMG preset by CR", ENEMIES_BY_CR$cr, 5),
+        actionButton("load_cr", "Load", class = "btn-sm btn-outline-primary")),
+    helpText("Loads AC, HP, attack bonus, damage split over 2 attacks, and save DC from the DMG table."),
+    sliderInput("target_ac", "Target AC", 8, 25, 15, 1),
+    numericInput("target_hp", "Target HP (for rounds-to-kill)", 90, 1, 1000),
+    numericInput("t_save", "Target saving-throw bonus (for save-based damage)", 2, -2, 12),
+    sliderInput("extra_targets", "Multi-target credit: additional targets in reach", 0, 3, 0, 1),
+    checkboxInput("target_large", "Target is Large or larger (Giant Killer)", FALSE),
+    numericInput("e_n", "Enemy attacks / round", 2, 1, 8),
+    numericInput("e_bonus", "Enemy attack bonus", 6, 0, 20),
+    row3(numericInput("e_ndice", "Dice", 1, 0, 20), numericInput("e_die", "Die", 8, 0, 20), numericInput("e_flat", "Flat", 4, 0, 50)),
+    sel("e_type", "Damage type", ALL_DAMAGE_TYPES, "slashing"),
+    checkboxInput("e_melee", "Enemy attacks are melee", TRUE),
+    checkboxInput("e_adv", "Enemy has advantage against you (other than from Reckless Attack)", FALSE),
+
+    sec("Simulation"),
+    sliderInput("nsim", "Simulated rounds", 1000, 50000, 5000, 1000),
+    numericInput("seed", "Seed", 42, 1, 1e6),
+    sel("dodge_policy", "Uncanny Dodge policy (simulation only)", c("React to the first hit" = "first", "React to the largest hit (hindsight)" = "largest")),
+    sec("Combat tab"),
+    sliderInput("max_rounds", "Maximum rounds per combat", 3, 30, 12, 1),
+    checkboxInput("nova", "Round-1 nova (Action Surge, Fighting Spirit, Assassinate, Dread Ambusher)", TRUE),
+    checkboxInput("surprised", "Target is surprised in round 1 (Assassinate auto-crit)", FALSE),
+    numericInput("con_save", "Your CON saving-throw bonus (concentration)", 2, -2, 15),
+    checkboxInput("war_caster", "War Caster (advantage on concentration saves)", FALSE)
   ),
   tags$style(HTML(MOBILE_CSS)),
   # Load plotly.js synchronously before Shiny connects. Shinylive injects htmlwidget scripts
@@ -282,67 +295,55 @@ ui <- page_sidebar(
   # ("Plotly is not defined"), which aborts Shiny's message handling and leaves outputs grey.
   tags$script(src = "plotly.min.js"),
   tags$script(HTML(PLOT_JS)),
-  navset_card_tab(id = "main_tab",
+  navset_pill(id = "main_tab",
     nav_panel("Offense",
-      vb_row(
-        value_box("Exact DPR", textOutput("off_exact"), theme = "primary"),
-        value_box("Simulated mean ± SE", textOutput("off_sim")),
-        value_box("Median · 5–95%", textOutput("off_q")),
-        value_box("P(zero damage)", textOutput("off_p0"))),
-      card(card_header("Distribution of damage per round"), plt("off_hist")),
-      card(card_header("Term-by-term breakdown (closed form)"), tbl("off_table"))
+      kpis(kpi("Exact DPR", "off_exact", "kpi-primary"), kpi("Simulated mean ± SE", "off_sim"),
+           kpi("Median · 5–95%", "off_q"), kpi("P(zero damage)", "off_p0")),
+      panel("Distribution of damage per round", plt("off_hist")),
+      panel("Term-by-term breakdown (closed form)", tbl("off_table"))
     ),
     nav_panel("Defense",
-      vb_row(
-        value_box("Exact damage taken / round", textOutput("def_exact"), theme = "danger"),
-        value_box("Simulated mean ± SE", textOutput("def_sim")),
-        value_box("Median · 5–95%", textOutput("def_q")),
-        value_box("Armor Class", textOutput("def_ac"))),
-      card(card_header("Distribution of damage taken per round"), plt("def_hist")),
-      card(card_header("Breakdown"), tbl("def_table")),
-      card(card_header("Damage reflected to attacker"), tbl("reflect_table"))
+      kpis(kpi("Exact damage taken / round", "def_exact", "kpi-danger"), kpi("Simulated mean ± SE", "def_sim"),
+           kpi("Median · 5–95%", "def_q"), kpi("Armor Class", "def_ac")),
+      panel("Distribution of damage taken per round", plt("def_hist")),
+      panel("Breakdown", tbl("def_table")),
+      panel("Damage reflected to attacker", tbl("reflect_table"))
     ),
     nav_panel("Rounds to…",
-      pair(
-        card(card_header("Rounds to kill the target"), plt("rtk_hist", "260px"), tbl("rtk_table")),
-        card(card_header(textOutput("rtd_header")), plt("rtd_hist", "260px"), tbl("rtd_table")))
+      pair(panel("Rounds to kill the target", plt("rtk_hist", "260px"), tbl("rtk_table")),
+           panel(textOutput("rtd_header", inline = TRUE), plt("rtd_hist", "260px"), tbl("rtd_table")))
     ),
     nav_panel("Combat",
       helpText("Whole combats, simulated with state: damage stops at the kill, resource pools are spent greedily instead of the sliders, ",
                "concentration can break, round-1 nova features fire, Colossus Slayer waits for a damaged target, Toll the Dead starts on a d8. ",
                "Uses the Target HP / Character HP inputs. Reaction attacks are not included here."),
-      vb_row(
-        value_box("P(you win)", textOutput("cb_pwin"), theme = "primary"),
-        value_box("Rounds to kill (median)", textOutput("cb_kill")),
-        value_box("P(you drop first or time out)", textOutput("cb_pdrop"), theme = "danger"),
-        value_box("Your HP left when you win (mean)", textOutput("cb_hpleft"))),
-      pair(
-        card(card_header("Round the target dies"), plt("cb_kill_hist", "240px")),
-        card(card_header("Round you drop (if you do)"), plt("cb_drop_hist", "240px"))),
-      card(card_header("Total damage dealt per combat"), plt("cb_dealt_hist", "240px")),
-      card(card_header("Summary"), tbl("cb_table"))
+      kpis(kpi("P(you win)", "cb_pwin", "kpi-primary"), kpi("Rounds to kill (median)", "cb_kill"),
+           kpi("P(you drop first or time out)", "cb_pdrop", "kpi-danger"), kpi("Your HP left when you win (mean)", "cb_hpleft")),
+      pair(panel("Round the target dies", plt("cb_kill_hist", "240px")), panel("Round you drop (if you do)", plt("cb_drop_hist", "240px"))),
+      panel("Total damage dealt per combat", plt("cb_dealt_hist", "240px")),
+      panel("Summary", tbl("cb_table"))
     ),
     nav_panel("Trade-off",
-      card(card_header("Offensive DPR vs. target AC (closed form)"), plt("tradeoff_plot", "320px")),
-      card(card_header("Damage taken per round vs. enemy attack bonus, at your current AC"), plt("defense_curve_plot", "260px"))
+      panel("Offensive DPR vs. target AC (closed form)", plt("tradeoff_plot", "320px")),
+      panel("Damage taken per round vs. enemy attack bonus, at your current AC", plt("defense_curve_plot", "260px"))
     ),
     nav_panel("Progression",
       helpText("Levels 1–20 with every other input held fixed (ability modifiers are not bumped for ASIs; raise them by hand to compare)."),
-      card(card_header("DPR and damage taken by level"), plt("progression_plot", "340px")),
-      card(card_header("Table"), tbl("progression_table"))
+      panel("DPR and damage taken by level", plt("progression_plot", "340px")),
+      panel("Table", tbl("progression_table"))
     ),
     nav_panel("Formula",
       withMathJax(),
-      card(card_header("Offense — each term with the current numbers substituted"), uiOutput("formula_off")),
-      card(card_header("Defense"), uiOutput("formula_def")),
-      card(card_header("Symbols"), helpText(
+      panel("Offense — each term with the current numbers substituted", uiOutput("formula_off")),
+      panel("Defense", uiOutput("formula_def")),
+      panel("Symbols", helpText(
         "A = attacks per round, p_h / p_c = hit / crit probability, D_h / D_c = damage on a hit / crit, ",
         "q = P(first hit is a crit), m = resistance multiplier, n = enemy attacks. ",
         "Once-per-turn riders ride the first hit among the attacks they are allowed to ride; per-hit riders are summed over every attack."))
     ),
     nav_panel("Build",
-      card(card_header("Active features"), tbl("features")),
-      card(card_header("Modelling notes"), uiOutput("notes"))
+      panel("Active features", tbl("features")),
+      panel("Modelling notes", uiOutput("notes"))
     )
   )
 )
@@ -377,7 +378,7 @@ server <- function(input, output, session) {
     req(input$subclass %in% CLASS_SUBCLASSES[[input$class]])
     rc <- routine_choices(input$class, input$subclass, input$level)
     if (!identical(rc$ch, isolate(routine_state$ch)) ) {
-      updateRadioButtons(session, "routine", choices = rc$ch, selected = if (isolate(input$routine) %in% rc$ch) isolate(input$routine) else rc$sel)
+      updateSelectInput(session, "routine", choices = rc$ch, selected = if (isolate(input$routine) %in% rc$ch) isolate(input$routine) else rc$sel)
       routine_state$ch <- rc$ch }
     o <- class_options(input$class, input$subclass)
     if (!is.null(o)) updateSelectInput(session, "option", label = o$label, choices = o$choices)
