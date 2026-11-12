@@ -2,6 +2,17 @@
 // Shinylive's host page fails silently on phones; this prints the first errors on screen so a
 // screenshot is enough to diagnose. Shows nothing when everything works.
 (function () {
+  // Cross-origin isolation: Shinylive's service worker adds COOP/COEP headers only when the page
+  // is opened with ?coi=1. With them, webR gets SharedArrayBuffer and uses its native channel
+  // instead of the PostMessage fallback, whose stack unwinding overflowed the call stack on iOS
+  // Safari ("RangeError: Maximum call stack size exceeded"). Send every visit there.
+  try {
+    if (!/[?&]coi=1(&|$)/.test(location.search) && !/_shinylive-mode=/.test(location.search)) {
+      var q = location.search ? location.search + '&coi=1' : '?coi=1';
+      location.replace(location.pathname + q + location.hash);
+      return;
+    }
+  } catch (e) {}
   var lines = [], box = null, started = Date.now(), appSeen = false;
   function show(msg) {
     lines.push(msg); if (lines.length > 8) lines.shift();
@@ -22,7 +33,7 @@
     ce.apply(console, arguments); };
   if (!('serviceWorker' in navigator)) show('No service worker support in this browser context. Shinylive needs one: open the link directly in Safari or Chrome (not inside Messages, Instagram, Facebook, etc.) and not in Private mode.');
   if (typeof WebAssembly === 'undefined') show('WebAssembly is not available in this browser.');
-  if (typeof SharedArrayBuffer === 'undefined') lines.push('(info) SharedArrayBuffer unavailable — using the slower PostMessage channel; this is normal on GitHub Pages.');
+  if (typeof SharedArrayBuffer === 'undefined') lines.push('(info) SharedArrayBuffer unavailable (crossOriginIsolated=' + self.crossOriginIsolated + '): webR is on the PostMessage fallback channel.');
   if (navigator.deviceMemory) lines.push('(info) deviceMemory ≈ ' + navigator.deviceMemory + ' GB');
   // watchdog: if the app iframe never shows content, say so
   var t = setInterval(function () {
