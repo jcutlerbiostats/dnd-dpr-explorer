@@ -9,7 +9,13 @@ suppressPackageStartupMessages({
 # (Plotly.react). The plotly R package is deliberately NOT used: it pulls ggplot2, htmlwidgets,
 # knitr, rmarkdown, stringi, data.table, httr and openssl into the WebAssembly bundle (~35 MB),
 # which is what blew past the iOS WebKit memory limit and gave a blank page on phones.
-source("R/engine.R"); source("R/simulate.R"); source("R/build_events.R"); source("R/plots.R"); source("R/combat.R")
+stage <- function(x) cat("DPR-STAGE:", x, "\n")          # start-up markers, shown by scripts/diag.js on failure
+stage("packages attached")
+source("R/engine.R");       stage("engine")
+source("R/simulate.R");     stage("simulate")
+source("R/build_events.R"); stage("build_events (CSVs read)")
+source("R/plots.R");        stage("plots")
+source("R/combat.R");       stage("combat")
 
 DEFAULT_ARMOR <- c(Barbarian = "None", Fighter = "Chain mail", Rogue = "Studded leather",
                    Monk = "None", Paladin = "Chain mail", Ranger = "Scale mail",
@@ -99,6 +105,7 @@ PLOT_JS <- "
 })();
 "
 
+stage("helpers defined; building UI")
 ui <- page_sidebar(
   title = "D&D 5e DPR explorer",
   fillable = FALSE,      # natural heights; the page scrolls (better on phones than viewport-filling cards)
@@ -340,7 +347,9 @@ ui <- page_sidebar(
   )
 )
 
+stage("UI built")
 server <- function(input, output, session) {
+  stage("server started")
   # ---- choice lists that depend on class / subclass / level (no renderUI) ------------
   routine_choices <- function(cl, sc, lv) {
     nowc <- function(x) setdiff(x, c("Booming Blade", "Green-Flame Blade"))

@@ -15,7 +15,7 @@
   } catch (e) {}
   var lines = [], box = null, started = Date.now(), appSeen = false;
   function show(msg) {
-    lines.push(msg); if (lines.length > 8) lines.shift();
+    lines.push(msg); if (lines.length > 10) lines.shift();
     if (!box) { box = document.createElement('pre');
       box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;max-height:45vh;overflow:auto;margin:0;padding:8px 10px;' +
         'background:#fff3cd;color:#5c3b00;border-top:2px solid #e0a800;font:12px/1.4 -apple-system,Menlo,monospace;' +
@@ -25,7 +25,12 @@
   }
   window.addEventListener('error', function (e) { show('Error: ' + (e.message || e) + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); });
   window.addEventListener('unhandledrejection', function (e) { var r = e.reason || {};
-    show('Rejection: ' + (r.name || '') + ' ' + (r.message || (typeof r === 'string' ? r : '')) + '\n' + String(r.stack || '').split('\n').slice(0, 4).join('\n')); });
+    show('Rejection: ' + (r.name || '') + ' ' + (r.message || (typeof r === 'string' ? r : '')) + '\n[last stage: ' + lastStage + ']\n' +
+      String(r.stack || '').split('\n').slice(0, 14).map(function (l) { return l.replace(/@wasm-function/g, '').replace(/^\s*(\d+)\[\1\]$/, '$1'); }).join(' > ')); });
+  var lastStage = '(none yet)';
+  var cl = console.log; console.log = function () {
+    try { var t = Array.prototype.slice.call(arguments).join(' '); var m = t.match(/DPR-STAGE:\s*(.*)$/); if (m) lastStage = m[1]; } catch (x) {}
+    cl.apply(console, arguments); };
   var ce = console.error; console.error = function () {
     try { var t = Array.prototype.slice.call(arguments).join(' ');
       // webR routes R's stderr through console.error; only surface lines that look like real errors
