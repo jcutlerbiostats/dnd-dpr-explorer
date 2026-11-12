@@ -1,0 +1,5 @@
+# iOS smoke test 1: plainest possible Shiny app (no bslib page functions)
+library(shiny)
+ui <- fluidPage(h3("Test 1: basic Shiny"), sliderInput("n", "n", 1, 100, 10), textOutput("out"))
+server <- function(input, output, session) output$out <- renderText(paste("n squared =", input$n^2))
+shinyApp(ui, server)

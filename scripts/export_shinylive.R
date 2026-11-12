@@ -8,9 +8,14 @@ ok <- file.copy(c("app.R", "R", "data", "www"), stage, recursive = TRUE)
 stopifnot(all(ok))
 shinylive::export(stage, "_site", quiet = TRUE)
 
+# iOS smoke-test apps (tests/ios/*) exported as sub-sites: _site/test-basic/, _site/test-bslib/ ----
+for (t in c("basic", "bslib")) {
+  shinylive::export(file.path("tests/ios", t), file.path("_site", paste0("test-", t)), quiet = TRUE)
+}
+
 # Inject the diagnostic banner script into the host page (and the editor page) ----
 diag <- paste(readLines("scripts/diag.js", warn = FALSE), collapse = "\n")
-for (f in c("_site/index.html", "_site/edit/index.html")) if (file.exists(f)) {
+for (f in c("_site/index.html", "_site/edit/index.html", "_site/test-basic/index.html", "_site/test-bslib/index.html")) if (file.exists(f)) {
   html <- paste(readLines(f, warn = FALSE), collapse = "\n")
   html <- sub("<head>", paste0("<head>\n<script>", diag, "</script>"), html, fixed = TRUE)
   writeLines(html, f)

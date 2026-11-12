@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths-ignore:            # notes-only commits must not trigger a redeploy (Pages 404s briefly mid-deploy)
       - '**.md'
-      - 'tests/**'
+      - 'tests/testthat/**'
       - '*.Rproj'
   workflow_dispatch:
 
