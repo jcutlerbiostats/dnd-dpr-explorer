@@ -200,8 +200,8 @@ weapon_profile <- function(inp, class, pb, style = "None", monk_die = NULL,
 }
 
 features_for <- function(class, subclass, level) {
-  CLASSES %>% filter(class == !!class, level <= !!level,
-                     is.na(subclass) | subclass == !!subclass) %>% arrange(level)
+  d <- CLASSES[CLASSES$class == class & CLASSES$level <= level & (is.na(CLASSES$subclass) | CLASSES$subclass == subclass), ]
+  d[order(d$level), ]
 }
 
 finish_build <- function(class, inp, events, prof = NULL, roll_mode = "flat", crit_min = 20, ac,

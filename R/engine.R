@@ -9,8 +9,50 @@
 # Defense:  damage_taken(enemy_attacks, ac, ...)
 
 suppressPackageStartupMessages({   # attach messages land in the browser console as "errors" under webR
-  library(magrittr); library(dplyr); library(purrr); library(tibble)
+  library(magrittr); library(tibble)
 })
+
+# Shallow stand-ins for the purrr / dplyr helpers used across the engine --------------
+# iOS Safari gives the WebAssembly R process a small call stack and purrr/dplyr spend
+# 15-30 R frames per call (rlang, quosures, tidyselect); nested inside Shiny's reactive
+# machinery that overflowed ("Maximum call stack size exceeded"). These keep the same
+# names and semantics (including `~ .x` lambdas) with base R, two or three frames each.
+`%||%` <- function(a, b) if (is.null(a)) b else a
+.fn <- function(f) {
+  if (inherits(f, "formula")) { body <- f[[2]]; function(.x, ...) eval(body, list(.x = .x, . = .x), environment(f)) }
+  else if (is.character(f) || is.numeric(f)) function(.x, ...) .x[[f]]      # purrr's extractor shorthand
+  else match.fun(f) }
+map     <- function(.x, .f, ...) lapply(.x, .fn(.f), ...)
+map_dbl <- function(.x, .f, ...) vapply(.x, .fn(.f), numeric(1), ...)
+map_chr <- function(.x, .f, ...) vapply(.x, .fn(.f), character(1), ...)
+map_lgl <- function(.x, .f, ...) vapply(.x, .fn(.f), logical(1), ...)
+keep    <- function(.x, .p, ...) .x[vapply(.x, .fn(.p), logical(1), ...)]
+map_dfr <- function(.x, .f, ...) bind_rows(lapply(.x, .fn(.f), ...))
+bind_rows <- function(...) {
+  parts <- list(...)
+  flat <- list()
+  for (p in parts) { if (is.data.frame(p)) flat[[length(flat) + 1]] <- p else if (is.list(p)) for (q in p) if (is.data.frame(q)) flat[[length(flat) + 1]] <- q }
+  flat <- Filter(function(d) ncol(d) > 0, flat)
+  if (!length(flat)) return(tibble())
+  cols <- unique(unlist(lapply(flat, names)))
+  flat <- lapply(flat, function(d) { d <- as.data.frame(d, stringsAsFactors = FALSE)
+    for (c in setdiff(cols, names(d))) d[[c]] <- rep(NA, nrow(d)); d[cols] })
+  out <- do.call(rbind, flat); rownames(out) <- NULL; tibble::as_tibble(out)
+}
+# tibble() goes through quosures, vctrs and glue (~15 frames); this builds the same
+# tibble-classed data frame with base R. Column recycling of length-1 values is kept.
+tibble <- function(...) {
+  cols <- list(...); if (!length(cols)) return(tibble::new_tibble(list(), nrow = 0))
+  n <- max(vapply(cols, length, integer(1)))
+  cols <- lapply(cols, function(v) if (length(v) == n) v else rep_len(v, n))
+  tibble::new_tibble(cols, nrow = n)
+}
+case_when <- function(...) {   # two-sided formulas, first TRUE wins (scalar / vector lhs)
+  fs <- list(...); n <- max(vapply(fs, function(f) length(eval(f[[2]], environment(f))), integer(1)))
+  out <- rep(NA, n)
+  for (f in rev(fs)) { cond <- rep_len(eval(f[[2]], environment(f)), n); val <- rep_len(eval(f[[3]], environment(f)), n); out[which(cond)] <- val[which(cond)] }
+  out
+}
 
 ROLL_MODES <- c("flat", "advantage", "disadvantage", "elven_accuracy")
 

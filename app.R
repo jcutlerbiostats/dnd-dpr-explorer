@@ -3,8 +3,12 @@
 # Phase 4: all 13 classes (casters via fixed routines / cantrip mode).
 # Run:  shiny::runApp()   from the project root
 suppressPackageStartupMessages({
-  library(shiny); library(bslib); library(dplyr); library(purrr)
+  library(shiny); library(bslib)
 })
+# R's just-in-time bytecode compiler recurses deeply (cmp > cmpCall > tryInline > h > cmp …)
+# the first time each closure runs. Under iOS Safari's small WebAssembly stack that was the
+# single deepest call chain in the app, so compile nothing: the interpreter is plenty fast here.
+compiler::enableJIT(0)
 # Charts: plotly.js is shipped in www/ and driven directly through a custom message
 # (Plotly.react). The plotly R package is deliberately NOT used: it pulls ggplot2, htmlwidgets,
 # knitr, rmarkdown, stringi, data.table, httr and openssl into the WebAssembly bundle (~35 MB),
@@ -133,7 +137,7 @@ row3  <- function(...) div(class = "row3", ...)
 kpis  <- function(...) div(class = "kpi-row", ...)
 kpi   <- function(title, id, cls = "") div(class = paste("kpi", cls), div(class = "kpi-t", title), textOutput(id, container = function(...) div(class = "kpi-v", ...)))
 panel <- function(title, ...) div(class = "pane", if (!is.null(title)) div(class = "pane-h", title), ...)
-tbl   <- function(id) tagAppendAttributes(tableOutput(id), class = "table-responsive")
+tbl   <- function(id) div(class = "table-responsive", uiOutput(id))
 plt   <- function(id, height = "300px") div(id = id, class = "dpr-plot", style = paste0("height:", height, "; width:100%;"))
 pair  <- function(...) div(class = "pair", ...)
 
@@ -438,17 +442,34 @@ server <- function(input, output, session) {
   enemy <- reactive(enemy_attack("Enemy", input$e_n, input$e_bonus, input$e_ndice, input$e_die, input$e_flat, input$e_type))
   first_hit <- reactive({ b <- build(); b$first_hit })
 
-  def_exact <- reactive({ b <- build(); damage_taken(enemy(), b$ac, enemy_mode(), resist = b$resist, first_hit = first_hit(), flat_reduction = b$flat_reduction %||% 0) })
-  first_hit_sim <- reactive({ fh <- first_hit(); if (!is.null(fh) && fh$mode == "halve") fh$policy <- input$dodge_policy; fh })
-  def_sim   <- reactive({ b <- build(); simulate_damage_taken(enemy(), b$ac, enemy_mode(), resist = b$resist, first_hit = first_hit_sim(), flat_reduction = b$flat_reduction %||% 0, n = input$nsim, seed = input$seed + 1) })
-  # reaction attacks (Retaliation, Giant Killer) fire when the enemy hits you
-  p_hit_taken <- reactive({ d <- def_exact()$breakdown; d <- d[!is.na(d$attacks), ]
-    if (!input$e_melee && !is.null(build()$reaction) && isTRUE(build()$reaction$melee_only)) 0 else 1 - prod((1 - d$p_hit)^d$attacks) })
-  build_off <- reactive(with_reaction(build(), p_hit_taken()))
+  # One observer computes every per-round result and stores plain values; the outputs below
+  # read them with a single reactive hop. (Outputs that read a reactive that reads another
+  # reactive cost ~45 Shiny frames per hop, and iOS Safari's WebAssembly stack is small.)
+  R <- reactiveValues()
+  observe({
+    b <- build(); en <- enemy(); em <- enemy_mode(); fh <- first_hit()
+    fhs <- fh; if (!is.null(fhs) && fhs$mode == "halve") fhs$policy <- input$dodge_policy
+    ac <- input$target_ac; n <- input$nsim; sd <- input$seed; hp_t <- input$target_hp; hp_c <- b$hp_override %||% input$hp
+    e_melee <- isTRUE(input$e_melee)
+    de <- damage_taken(en, b$ac, em, resist = b$resist, first_hit = fh, flat_reduction = b$flat_reduction %||% 0)
+    d <- de$breakdown[!is.na(de$breakdown$attacks), ]
+    p_hit <- if (!e_melee && !is.null(b$reaction) && isTRUE(b$reaction$melee_only)) 0 else 1 - prod((1 - d$p_hit)^d$attacks)
+    bo <- with_reaction(b, p_hit)
+    oe <- round_dpr(bo$events, bo$attack_bonus, ac, bo$roll_mode, bo$crit_min, bo$to_hit_die %||% 0)
+    os <- simulate_round(bo$events, bo$attack_bonus, ac, bo$roll_mode, bo$crit_min, bo$to_hit_die %||% 0, n = n, seed = sd)
+    ds <- simulate_damage_taken(en, b$ac, em, resist = b$resist, first_hit = fhs, flat_reduction = b$flat_reduction %||% 0, n = n, seed = sd + 1)
+    R$build <- b; R$build_off <- bo; R$enemy <- en; R$enemy_mode <- em; R$char_hp <- hp_c
+    R$def_exact <- de; R$off_exact <- oe; R$off_sim <- os; R$def_sim <- ds
+    R$off_summary <- summarize_sim(os); R$def_summary <- summarize_sim(ds)
+    R$rtk <- rounds_to_threshold(os, hp_t, n = min(n, 5000), seed = sd + 2)
+    R$rtd <- rounds_to_threshold(ds, hp_c, n = min(n, 5000), seed = sd + 3)
+  })
+  # thin accessors so the rest of the server reads one level deep
+  off_exact <- function() R$off_exact; off_sim <- function() R$off_sim; def_exact <- function() R$def_exact; def_sim <- function() R$def_sim
+  build_off <- function() R$build_off; rtk <- function() R$rtk; rtd <- function() R$rtd; char_hp <- function() R$char_hp
 
-  off_exact <- reactive({ b <- build_off(); round_dpr(b$events, b$attack_bonus, input$target_ac, b$roll_mode, b$crit_min, b$to_hit_die %||% 0) })
-  off_sim   <- reactive({ b <- build_off(); simulate_round(b$events, b$attack_bonus, input$target_ac, b$roll_mode, b$crit_min, b$to_hit_die %||% 0, n = input$nsim, seed = input$seed) })
-
+  fmt <- function(x, d = 1) formatC(x, format = "f", digits = d)
+  qtxt <- function(s) sprintf("%s · %s–%s", fmt(s$q50), fmt(s$q5), fmt(s$q95))
   # Chart specs: plain lists sent to plotly.js (Plotly.react) via a custom message. Data are
   # pre-aggregated in R so each message is a few KB. I() keeps length-1 vectors as JSON arrays.
   base_layout <- function(xlab, ylab, legend = FALSE, extra = list()) {
@@ -493,38 +514,49 @@ server <- function(input, output, session) {
   }
   # send a chart only while its tab is showing (keeps the old suspend-when-hidden laziness)
   plot_when <- function(tab, id, expr) observe({ req(identical(input$main_tab, tab)); session$sendCustomMessage("dpr-plot", c(list(id = id), expr())) })
-  fmt <- function(x, d = 1) formatC(x, format = "f", digits = d)
-  qtxt <- function(s) sprintf("%s · %s–%s", fmt(s$q50), fmt(s$q5), fmt(s$q95))
-  rnd <- function(df) df %>% mutate(across(where(is.numeric), ~ round(.x, 3)))
+  # Lightweight HTML table. Shiny's table renderer goes through xtable and needs far more R
+  # call depth than iOS Safari's WebAssembly stack allows (it overflowed with "Maximum call
+  # stack size exceeded"); this builds <table> tags directly and stays shallow.
+  rnd <- function(df, d = 3) { df <- as.data.frame(df, stringsAsFactors = FALSE)
+    for (j in seq_along(df)) if (is.numeric(df[[j]])) df[[j]] <- round(df[[j]], d); df }
+  html_table <- function(df, digits = 3) {
+    # Emit one HTML string, not nested tag objects: renderUI's dependency scan recurses into
+    # every nested tag (one R frame per level), which was the deepest remaining call path.
+    df <- rnd(df, digits)
+    esc <- function(x) { x <- as.character(x); x[is.na(x)] <- ""; x <- gsub("&", "&amp;", x, fixed = TRUE); x <- gsub("<", "&lt;", x, fixed = TRUE); gsub(">", "&gt;", x, fixed = TRUE) }
+    cells <- lapply(df, function(col) if (is.numeric(col)) { v <- format(col, trim = TRUE); v[is.na(col)] <- ""; v } else esc(col))
+    head <- paste0("<th>", esc(names(df)), "</th>", collapse = "")
+    body <- if (nrow(df)) paste0("<tr>", do.call(paste0, c(lapply(cells, function(v) paste0("<td>", v, "</td>")))), "</tr>", collapse = "") else ""
+    HTML(paste0('<table class="table table-sm table-striped"><thead><tr>', head, "</tr></thead><tbody>", body, "</tbody></table>"))
+  }
+  render_tbl <- function(expr, digits = 3) { f <- substitute(expr); env <- parent.frame()
+    renderUI(html_table(eval(f, env), digits)) }
 
   output$off_exact <- renderText(fmt(off_exact()$total, 2))
-  output$off_sim   <- renderText({ s <- summarize_sim(off_sim()); sprintf("%s ± %s", fmt(s$mean, 2), fmt(s$se_mean, 2)) })
-  output$off_q     <- renderText(qtxt(summarize_sim(off_sim())))
-  output$off_p0    <- renderText(sprintf("%.1f%%", 100 * mean(off_sim() == 0)))
-  output$off_table <- renderTable(rnd(off_exact()$breakdown), striped = TRUE)
+  output$off_sim   <- renderText({ s <- R$off_summary; sprintf("%s ± %s", fmt(s$mean, 2), fmt(s$se_mean, 2)) })
+  output$off_q     <- renderText(qtxt(R$off_summary))
+  output$off_p0    <- renderText(sprintf("%.1f%%", 100 * R$off_summary$p_zero))
+  output$off_table <- render_tbl(off_exact()$breakdown)
   plot_when("Offense", "off_hist", function() hist_spec(off_sim(), off_exact()$total, "#2c3e50", "Damage dealt in a round (line = exact mean)"))
 
   output$def_exact <- renderText(fmt(def_exact()$total, 2))
-  output$def_sim   <- renderText({ s <- summarize_sim(def_sim()); sprintf("%s ± %s", fmt(s$mean, 2), fmt(s$se_mean, 2)) })
-  output$def_q     <- renderText(qtxt(summarize_sim(def_sim())))
+  output$def_sim   <- renderText({ s <- R$def_summary; sprintf("%s ± %s", fmt(s$mean, 2), fmt(s$se_mean, 2)) })
+  output$def_q     <- renderText(qtxt(R$def_summary))
   output$def_ac    <- renderText(build()$ac)
-  output$def_table <- renderTable(rnd(def_exact()$breakdown), striped = TRUE)
-  output$reflect_table <- renderTable({
+  output$def_table <- render_tbl(def_exact()$breakdown)
+  output$reflect_table <- render_tbl({
     b <- build(); r <- b$reflect
     if (!input$e_melee) r <- keep(r, ~ !.x$melee_only)
     if (length(r) == 0) return(data.frame(note = "None for this build / enemy."))
     b$reflect <- r
-    reflect_damage(b, enemy(), def_exact()$breakdown) %>% mutate(across(where(is.numeric), ~ round(.x, 2)))
+    reflect_damage(b, R$enemy, def_exact()$breakdown)
   })
   plot_when("Defense", "def_hist", function() hist_spec(def_sim(), def_exact()$total, "#c0392b", "Damage taken in a round (line = exact mean)"))
 
-  rtk <- reactive(rounds_to_threshold(off_sim(), input$target_hp, n = min(input$nsim, 5000), seed = input$seed + 2))
-  char_hp <- reactive({ b <- build(); b$hp_override %||% input$hp })
-  rtd <- reactive(rounds_to_threshold(def_sim(), char_hp(),       n = min(input$nsim, 5000), seed = input$seed + 3))
-  rt_table <- function(r) { s <- r$summary %>% mutate(across(everything(), ~ round(.x, 2))); s$censored_at_50 <- sprintf("%.1f%%", 100 * r$censored); s }
+  rt_table <- function(r) { s <- rnd(r$summary, 2); s$censored_at_50 <- sprintf("%.1f%%", 100 * r$censored); s }
   output$rtd_header <- renderText(sprintf("Rounds until the character drops (%d HP%s)", char_hp(), if (!is.null(build()$hp_override)) ", beast form" else ""))
-  output$rtk_table <- renderTable(rt_table(rtk()))
-  output$rtd_table <- renderTable(rt_table(rtd()))
+  output$rtk_table <- render_tbl(rt_table(rtk()), 2)
+  output$rtd_table <- render_tbl(rt_table(rtd()), 2)
   plot_when("Rounds to…", "rtk_hist", function() bar_spec(rtk()$rounds, "#2c3e50", "Rounds to reduce target to 0 HP", "Simulated combats"))
   plot_when("Rounds to…", "rtd_hist", function() bar_spec(rtd()$rounds, "#c0392b", "Rounds until character reaches 0 HP", "Simulated combats"))
 
@@ -534,24 +566,28 @@ server <- function(input, output, session) {
   plot_when("Trade-off", "tradeoff_plot", function()
     line_spec(tradeoff_curves(inp_list()), "target_ac", "dpr", "variant", c("#2c3e50", "#e67e22", "#27ae60"), input$target_ac, "Target AC", "Expected damage per round"))
   plot_when("Trade-off", "defense_curve_plot", function()
-    line_spec(defense_curve(build(), enemy(), enemy_mode()), "enemy_bonus", "taken", NULL, "#c0392b", input$e_bonus, "Enemy attack bonus", "Expected damage taken per round"))
-  prog <- reactive(progression(inp_list(), input$target_ac, enemy(), isTRUE(input$e_adv)))
+    line_spec(defense_curve(R$build, R$enemy, R$enemy_mode), "enemy_bonus", "taken", NULL, "#c0392b", input$e_bonus, "Enemy attack bonus", "Expected damage taken per round"))
+  observe({ req(identical(input$main_tab, "Progression")); il <- inp_list(); ac <- input$target_ac; en <- enemy(); adv <- isTRUE(input$e_adv)
+    R$prog <- progression(il, ac, en, adv) })
+  prog <- function() { req(R$prog); R$prog }
   plot_when("Progression", "progression_plot", function() {
     pr <- prog()
     df <- rbind(data.frame(level = pr$level, measure = "Damage dealt / round", value = pr$dpr),
                 data.frame(level = pr$level, measure = "Damage taken / round", value = pr$taken))
     line_spec(df, "level", "value", "measure", c("#2c3e50", "#c0392b"), input$level, "Character level", "Expected damage per round", dtick = 1) })
-  output$progression_table <- renderTable(prog() %>% mutate(across(c(dpr, taken), ~ round(.x, 2))))
+  output$progression_table <- render_tbl(prog(), 2)
 
-  combat <- reactive({ b <- build()
-    simulate_combat(b, enemy(), input$target_ac, input$target_hp, char_hp(), enemy_mode(), n = min(input$nsim, 5000),
-                    max_rounds = input$max_rounds, seed = input$seed + 4, nova = isTRUE(input$nova), surprised = isTRUE(input$surprised),
-                    con_save = input$con_save, war_caster = isTRUE(input$war_caster), e_melee = isTRUE(input$e_melee)) })
+  observe({ req(identical(input$main_tab, "Combat"))
+    b <- build(); en <- enemy(); em <- enemy_mode(); ac <- input$target_ac; hp_t <- input$target_hp; hp_c <- R$char_hp
+    n <- min(input$nsim, 5000); mr <- input$max_rounds; sd <- input$seed + 4; nova <- isTRUE(input$nova); sur <- isTRUE(input$surprised)
+    cs <- input$con_save; wc <- isTRUE(input$war_caster); em2 <- isTRUE(input$e_melee)
+    R$combat <- simulate_combat(b, en, ac, hp_t, hp_c, em, n = n, max_rounds = mr, seed = sd, nova = nova, surprised = sur, con_save = cs, war_caster = wc, e_melee = em2) })
+  combat <- function() { req(R$combat); R$combat }
   output$cb_pwin   <- renderText(sprintf("%.1f%%", 100 * combat()$summary$p_win))
   output$cb_kill   <- renderText({ s <- combat()$summary; if (is.na(s$kill_round_median)) "never" else sprintf("%g (mean %.1f)", s$kill_round_median, s$kill_round_mean) })
   output$cb_pdrop  <- renderText(sprintf("%.1f%%", 100 * (1 - combat()$summary$p_win)))
   output$cb_hpleft <- renderText({ s <- combat()$summary; if (is.nan(s$char_hp_left_mean)) "—" else fmt(s$char_hp_left_mean) })
-  output$cb_table  <- renderTable(combat()$summary %>% mutate(across(everything(), ~ round(.x, 3))))
+  output$cb_table  <- render_tbl(combat()$summary)
   plot_when("Combat", "cb_kill_hist", function() bar_spec(combat()$kill_round, "#2c3e50", "Round the target dies", "Combats"))
   plot_when("Combat", "cb_drop_hist", function() bar_spec(combat()$drop_round, "#c0392b", "Round you drop", "Combats"))
   plot_when("Combat", "cb_dealt_hist", function() hist_spec(combat()$dealt_total, mean(combat()$dealt_total), "#2c3e50", "Damage dealt before the combat ended (line = mean)", "Combats"))
@@ -562,7 +598,7 @@ server <- function(input, output, session) {
   output$formula_off <- renderUI(typeset(formula_offense(off_exact()$breakdown, off_exact()$total)))
   output$formula_def <- renderUI(typeset(formula_defense(def_exact()$breakdown, def_exact()$total)))
 
-  output$features <- renderTable(build()$features %>% select(level, subclass, feature, effect_type, value, notes))
+  output$features <- render_tbl(build()$features[, c("level", "subclass", "feature", "effect_type", "value", "notes")])
   output$notes <- renderUI({
     b <- build()
     items <- c(sprintf("Attack bonus %+d; roll mode: %s; crit on %d+; AC %d; enemy rolls with %s.",
