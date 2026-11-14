@@ -73,6 +73,17 @@ After the bundle diet the iPhone still blanked. The injected diagnostics (`scrip
 - The Shinylive runtime stays at assets 0.9.1 (R 4.4.1). Assets 0.10.16 (R 4.6) exist and are cached locally, but they need the shinylive R package ≥ 0.5.0 to export ("resolved is not a function" with 0.3.0); the local install stubbornly stayed at 0.3.0 — revisit if the newer runtime is ever needed.
 - `scripts/diag.js` shows a yellow banner only when something fails (errors, rejections, missing features, 90-s watchdog). Keep it; it turned three blank screens into diagnoses.
 
+## iPhone fix round 3 (2026-11-13): R call-stack depth
+Two smoke-test apps (`tests/ios/*`, exported to `/test-basic/` and `/test-bslib/`) ran fine on the iPhone, so the platform was never the problem: Shiny renders and evaluates recursively, and the WebAssembly R process on iOS Safari gets a small call stack. The error moved stage by stage ("UI built" → "server started") as each deep chain was removed. Measured with a tracer that records `sys.nframe()` at leaf calls (scratch scripts `depth*.R`):
+| Chain | Frames | Fix |
+|---|---|---|
+| Sidebar: accordion + nested `conditionalPanel` + radio groups (15 tags deep) | page render overflowed | flat sidebar: headings, single-level conditional panels, selects, pill tabs, plain divs (`sec()`, `panel()`, `kpi()`) |
+| R's JIT bytecode compiler on first use of each closure (`cmp > cmpCall > tryInline > h > cmp …`) | 111 | `compiler::enableJIT(0)` at the top of `app.R` |
+| `renderTable()` via xtable | never finished at 400 | `html_table()` emits one flat HTML string (nested tag objects also made `renderUI`'s dependency scan recurse) |
+| purrr / dplyr / `tibble()` (rlang, quosures, vctrs, glue) | +15–30 per call | shallow base-R stand-ins with the same names at the top of `engine.R`; dplyr/purrr/readr no longer loaded |
+| Output → reactive → reactive → `input$` read (Shiny bookkeeping per hop) | 138 | one observer computes all per-round results into `reactiveValues` `R`; outputs read one hop; inputs read before heavy calls |
+Deepest run-time path is now ~116 frames and consists only of Shiny's promise machinery — the same floor as the minimal page that works on the phone.
+
 ## webR / Shinylive gotchas found (all fixed, keep in mind when editing)
 1. **`munsell` missing.** Shinylive's bundled webR is R 4.4 with ggplot2 3.5.2 / scales 1.3.0, older than the local library, and the exporter resolves dependencies from *local* metadata. Result: "there is no package called 'munsell'" and a blank page. Fix: `requireNamespace("munsell", quietly = TRUE)` near the top of `app.R` so it gets bundled (plotly loads ggplot2, which needs it).
 2. **"Plotly is not defined".** Shinylive injects htmlwidget scripts asynchronously, so the first chart render could run before the 3.5 MB plotly.js arrived; the exception aborted Shiny's message handling and left every output greyed. Fix: plotly.js in `www/`, loaded synchronously as a body `<script>`.
